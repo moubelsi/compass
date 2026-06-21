@@ -41,7 +41,7 @@ export default function AnalyticsPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, pnl, rr, strategy, created_at, trade_date')
+        .select('id, symbol, pnl, rr, return_pct, strategy, created_at, trade_date')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
       setTrades(data || [])
@@ -71,7 +71,7 @@ export default function AnalyticsPage() {
     const prev = acc[i - 1]?.value || 0
     acc.push({
       date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: prev + Number(trade.pnl || 0)
+      value: prev + Number(trade.return_pct || 0)
     })
     return acc
   }, [])

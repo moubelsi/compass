@@ -2,6 +2,74 @@
 
 ---
 
+## 2026-06-21 — Discipline Score
+
+### Feature: Discipline Score on dashboard
+
+**Files changed**
+- `app/(app)/dashboard/page.tsx`
+
+**What changed**
+Replaced the "—" / "Coming soon" placeholder KPI card with a live Discipline Score (0–100) computed from the user's actual trade data.
+
+**Algorithm — process-based, not profit-based:**
+
+| Component | Weight | Formula |
+|---|---|---|
+| Planned trade rate | 40 pts | `planned / (planned + impulsive)` — trades with `trade_type` logged |
+| Plan adherence | 30 pts | `followed_plan = true / total trades` |
+| Confidence quality | 20 pts | `avg(confidence) / 10` — trades with confidence logged |
+| Journal completeness | 10 pts | `trades with notes or screenshot / total` |
+
+Score = sum of all components, rounded to integer.
+
+**Colour coding:**
+- ≥ 70 → green (`var(--profit)`) — strong process
+- 40–69 → amber (`#B45309`) — needs work
+- < 40 → red (`var(--loss)`) — focus on process
+- null (no trades) → no colour, sub shows "Log trades to unlock"
+
+**Select updated** to include `followed_plan, confidence, notes, screenshot_url` (previously only fetched performance fields).
+
+**Why**
+Discipline Score is a Phase 1 MVP item per the roadmap. The score measures process consistency rather than profitability — a user can have a high score despite losing trades if they followed their plan, journalled, and traded intentionally.
+
+**New dependencies**
+None
+
+---
+
+## 2026-06-21 — Equity curve now shows return %
+
+### Fix: Equity curve displays cumulative return %, not cumulative dollar P&L
+
+**Files changed**
+- `components/charts/EquityCurve.tsx`
+- `app/(app)/dashboard/page.tsx`
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+
+`EquityCurve.tsx`:
+- `CustomTooltip` now renders `+2.45%` / `-1.20%` instead of `+$245.00`
+- `formatAxis` now renders `+2.5%` / `-1.2%` instead of `$245` / `$1.2k`
+- `isUp` changed from `data[last].value >= data[0].value` to `data[last].value >= 0` — curve is green when total return is positive, red when negative
+
+`dashboard/page.tsx`:
+- `equityData` now accumulates `trade.return_pct` instead of `trade.pnl`
+
+`analytics/page.tsx`:
+- `return_pct` added to Supabase select
+- `equityData` now accumulates `trade.return_pct` instead of `trade.pnl`
+
+**Why**
+`PROJECT_CONTEXT.md` and `DESIGN_GUIDE.md` both specify the equity curve should show return % rather than dollar amounts. The old curve showed cumulative dollar P&L, which is meaningless without knowing account size and varies wildly between users. Cumulative return % is consistent and comparable.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — Behaviour display + Settings page
 
 ### Feature: Trade detail page now shows trade_type and confidence

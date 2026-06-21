@@ -53,7 +53,7 @@ export default function DashboardPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type')
+        .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type, followed_plan, confidence, notes, screenshot_url')
         .order('trade_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
       setTrades(data || [])
@@ -75,7 +75,7 @@ export default function DashboardPage() {
     const prev = acc[i - 1]?.value || 0
     acc.push({
       date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: prev + Number(trade.pnl || 0)
+      value: prev + Number(trade.return_pct || 0)
     })
     return acc
   }, [])
@@ -101,6 +101,17 @@ export default function DashboardPage() {
     }
     return `${planned.length + impulsive.length} of ${totalTrades} trades have trade type logged.`
   })()
+
+  // Discipline Score — process-based, not profit-based
+  const typedTrades    = trades.filter(t => t.trade_type)
+  const plannedPct     = typedTrades.length > 0 ? typedTrades.filter(t => t.trade_type === 'planned').length / typedTrades.length : 0
+  const followedPct    = totalTrades > 0 ? trades.filter(t => t.followed_plan).length / totalTrades : 0
+  const confTrades     = trades.filter(t => t.confidence != null)
+  const avgConf        = confTrades.length > 0 ? confTrades.reduce((s, t) => s + Number(t.confidence), 0) / confTrades.length : 0
+  const journalledPct  = totalTrades > 0 ? trades.filter(t => (t.notes && t.notes !== 'EMPTY') || (t.screenshot_url && t.screenshot_url !== 'EMPTY')).length / totalTrades : 0
+  const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalledPct * 10) : null
+  const disciplineColor = disciplineScore === null ? undefined : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
+  const disciplineSub   = disciplineScore === null ? 'Log trades to unlock' : `${totalTrades} trade${totalTrades !== 1 ? 's' : ''} analysed`
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -165,8 +176,9 @@ export default function DashboardPage() {
           />
           <KPICard
             label="Discipline score"
-            value="—"
-            sub="Coming soon"
+            value={disciplineScore !== null ? String(disciplineScore) : '—'}
+            sub={disciplineSub}
+            color={disciplineColor}
           />
         </div>
 

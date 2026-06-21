@@ -14,22 +14,19 @@ function CustomTooltip({ active, payload, label }: any) {
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px' }}>
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{label}</p>
       <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-        {v >= 0 ? '+' : '-'}${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+        {v >= 0 ? '+' : ''}{v.toFixed(2)}%
       </p>
     </div>
   )
 }
 
 function formatAxis(v: number): string {
-  const abs = Math.abs(v)
-  const sign = v < 0 ? '-' : ''
-  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`
-  return `${sign}$${abs.toFixed(0)}`
+  return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 }
 
 export function EquityCurve({ data }: { data: DataPoint[] }) {
   if (!data.length) return null
-  const isUp = data[data.length - 1].value >= data[0].value
+  const isUp = data[data.length - 1].value >= 0
   const color = isUp ? 'var(--profit)' : 'var(--loss)'
   return (
     <ResponsiveContainer width="100%" height="100%">
