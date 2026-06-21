@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-06-21 — cTrader CSV parser fixes
+
+### Fix: CSV parser now recognises native cTrader export format
+
+**Files changed**
+- `app/(app)/trades/import/page.tsx`
+
+**Root cause**
+The original parser assumed `lines[0]` was always the header row and used fixed column name aliases that did not match cTrader's actual export columns.
+
+**Actual cTrader CSV columns:**
+```
+Symbol, Opening Direction, Closing Time (UTC+2), Entry price, Closing Price, Closing Quantity, Net EUR, Balance EUR
+```
+
+**Five fixes applied:**
+
+1. **Header row detection** — parser now scans all lines to find the first row containing `symbol`, skipping any account metadata lines cTrader puts at the top (account number, period, currency, etc.)
+
+2. **`Opening Direction`** — added as an alias for the direction column (previously only matched `direction`, `side`, `type`)
+
+3. **`Closing Price`** — added as an alias for the exit price column (previously only matched `close price`, `exit price`)
+
+4. **`Closing Time (UTC+2)`** — the `clean()` function now strips trailing parenthetical suffixes (e.g. `(UTC+2)`, `(UTC+3)`) before matching, so `closing time (utc+2)` matches `closing time`; `closing time` added as an alias
+
+5. **`Net EUR` / `Net USD` / `Net GBP`** — added a fallback that matches any column whose name starts with `net ` (covers any currency cTrader account is denominated in)
+
+**Data rows** — loop now starts at `headerRowIdx + 1` instead of hardcoded `1`, so rows above the header are correctly skipped.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — cTrader CSV Import
 
 ### Feature: Import cTrader closed positions CSV

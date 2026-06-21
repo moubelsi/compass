@@ -20,32 +20,50 @@ function parseCSV(text: string): ParsedTrade[] {
   const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   if (lines.length < 2) throw new Error('File appears empty — needs at least a header and one trade row.')
 
-  const headerLine = lines[0]
-  const sep = (headerLine.match(/;/g) || []).length >= (headerLine.match(/,/g) || []).length ? ';' : ','
+  // Detect separator from the first line that has more than one cell
+  const firstMultiCell = lines.find(l => l.includes(';') || l.includes(',')) ?? lines[0]
+  const sep = (firstMultiCell.match(/;/g) || []).length >= (firstMultiCell.match(/,/g) || []).length ? ';' : ','
 
-  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, '').toLowerCase()
-  const cols = headerLine.split(sep).map(clean)
+  // Strip surrounding quotes and trailing parenthetical suffixes like "(UTC+2)"
+  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, '').replace(/\s*\(.*?\)\s*$/, '').toLowerCase().trim()
+
+  // FIX 1: scan all lines for the header row — skip metadata rows cTrader puts at the top
+  let headerRowIdx = -1
+  let cols: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const candidate = lines[i].split(sep).map(clean)
+    if (candidate.includes('symbol')) { headerRowIdx = i; cols = candidate; break }
+  }
+
+  if (headerRowIdx < 0) throw new Error('Cannot find a header row with a "Symbol" column. Is this a cTrader CSV export?')
+
   const find = (...names: string[]) => names.reduce((f, n) => f >= 0 ? f : cols.indexOf(n), -1)
 
   const symbolIdx     = find('symbol')
-  const dirIdx        = find('direction', 'side', 'type')
+  // FIX 2: add "opening direction" alias
+  const dirIdx        = find('opening direction', 'direction', 'side', 'type')
   const openPriceIdx  = find('open price', 'entry price', 'open_price', 'entry_price')
-  const closePriceIdx = find('close price', 'exit price', 'close_price', 'exit_price')
+  // FIX 3: add "closing price" alias
+  const closePriceIdx = find('closing price', 'close price', 'exit price', 'close_price', 'exit_price')
   const netProfitIdx  = find('net profit', 'net_profit')
+  // FIX 5: "net eur", "net usd", "net gbp" etc. matched by startsWith below
   const grossProfitIdx= find('gross profit', 'gross_profit', 'profit', 'pnl', 'p/l')
-  const closeTimeIdx  = find('close time', 'exit time', 'close_time', 'exit_time', 'close date')
-  const openTimeIdx   = find('open time', 'entry time', 'open_time', 'entry_time')
+  // FIX 4: add "closing time" alias (parenthetical suffix already stripped by clean())
+  const closeTimeIdx  = find('closing time', 'close time', 'exit time', 'close_time', 'exit_time', 'close date')
+  const openTimeIdx   = find('open time', 'opening time', 'entry time', 'open_time', 'entry_time')
 
-  if (symbolIdx < 0)     throw new Error('Cannot find a "Symbol" column. Is this a cTrader "Closed Positions" CSV export?')
-  if (dirIdx < 0)        throw new Error('Cannot find a "Direction" or "Side" column.')
-  if (openPriceIdx < 0)  throw new Error('Cannot find an "Open Price" or "Entry Price" column.')
-  if (closePriceIdx < 0) throw new Error('Cannot find a "Close Price" or "Exit Price" column.')
+  // FIX 5: fallback — find any column starting with "net " (covers "net eur", "net usd", "net gbp", …)
+  const netCurrencyIdx = netProfitIdx >= 0 ? netProfitIdx : cols.findIndex(c => c.startsWith('net '))
+  const profitIdx = netCurrencyIdx >= 0 ? netCurrencyIdx : grossProfitIdx
 
-  const profitIdx = netProfitIdx >= 0 ? netProfitIdx : grossProfitIdx
+  if (symbolIdx < 0)     throw new Error('Cannot find a "Symbol" column. Is this a cTrader CSV export?')
+  if (dirIdx < 0)        throw new Error('Cannot find a "Direction" or "Opening Direction" column.')
+  if (openPriceIdx < 0)  throw new Error('Cannot find an "Entry Price" or "Open Price" column.')
+  if (closePriceIdx < 0) throw new Error('Cannot find a "Closing Price" or "Close Price" column.')
 
   const trades: ParsedTrade[] = []
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerRowIdx + 1; i < lines.length; i++) {
     const cells = lines[i].split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''))
     if (cells.length < 3) continue
 
