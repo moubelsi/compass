@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-06-21 — Behaviour Analytics (Phase 3)
+
+### Feature: Behaviour section on analytics page
+
+**Files changed**
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+
+Added a `Behaviour` section at the bottom of the analytics page, rendered only when the user has trades with `trade_type` or `confidence` logged.
+
+**Planned vs Impulsive cards** (shown when `trade_type` data exists):
+- Two side-by-side cards with a green top border (Planned) and red top border (Impulsive)
+- Each shows: trade count, win rate, total return %, avg return per trade
+- Colour-coded values (green/red based on whether metric is above threshold)
+
+**Confidence bands** (shown when `confidence` data exists):
+- Three cards in a row: Low (1–4), Mid (5–7), High (8–10)
+- Each shows: trade count, win rate, total return %
+- Graceful "—" state when a band has zero trades
+
+**Section is hidden entirely** when neither `trade_type` nor `confidence` has been logged on any trade — no empty state clutter.
+
+**Select updated** to include `trade_type, confidence`.
+
+**Why**
+Phase 3 roadmap item. Connects behaviour to performance — answers "do planned trades outperform impulsive ones?" and "does confidence level predict outcome?". Data is already collected per-trade; this section surfaces the signal.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — cTrader CSV parser fixes
 
 ### Fix: CSV parser now recognises native cTrader export format

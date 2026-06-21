@@ -41,7 +41,7 @@ export default function AnalyticsPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, pnl, rr, return_pct, strategy, created_at, trade_date')
+        .select('id, symbol, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
       setTrades(data || [])
@@ -104,6 +104,34 @@ export default function AnalyticsPage() {
     winRate: s.trades > 0 ? (s.wins / s.trades) * 100 : 0,
     trades: s.trades,
   }))
+
+  // Behaviour stats helper
+  function bStats(group: any[]) {
+    const w = group.filter(t => Number(t.pnl) > 0)
+    const totalReturn = group.reduce((s, t) => s + Number(t.return_pct || 0), 0)
+    return {
+      count: group.length,
+      winRate: group.length > 0 ? (w.length / group.length) * 100 : 0,
+      totalReturn,
+      avgReturn: group.length > 0 ? totalReturn / group.length : 0,
+    }
+  }
+
+  // Planned vs Impulsive
+  const planned   = trades.filter(t => t.trade_type === 'planned')
+  const impulsive = trades.filter(t => t.trade_type === 'impulsive')
+  const hasBehaviourData = planned.length + impulsive.length > 0
+  const plannedStats   = bStats(planned)
+  const impulsiveStats = bStats(impulsive)
+
+  // Confidence bands
+  const confTrades = trades.filter(t => t.confidence != null)
+  const hasConfidenceData = confTrades.length > 0
+  const confBands = [
+    { label: 'Low',  range: '1–4',  group: confTrades.filter(t => Number(t.confidence) <= 4) },
+    { label: 'Mid',  range: '5–7',  group: confTrades.filter(t => Number(t.confidence) >= 5 && Number(t.confidence) <= 7) },
+    { label: 'High', range: '8–10', group: confTrades.filter(t => Number(t.confidence) >= 8) },
+  ].map(b => ({ ...b, ...bStats(b.group) }))
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
@@ -271,6 +299,71 @@ export default function AnalyticsPage() {
             })}
           </div>
         </div>
+
+        {/* Behaviour */}
+        {(hasBehaviourData || hasConfidenceData) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <SectionTitle>Behaviour</SectionTitle>
+
+            {hasBehaviourData && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {[
+                  { label: 'Planned', stats: plannedStats, accent: 'var(--profit)' },
+                  { label: 'Impulsive', stats: impulsiveStats, accent: 'var(--loss)' },
+                ].map(({ label, stats, accent }) => (
+                  <div key={label} className="card" style={{ padding: 24, borderTop: `3px solid ${accent}` }}>
+                    <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 20 }}>{label}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div>
+                        <p className="label" style={{ marginBottom: 4 }}>Trades</p>
+                        <p style={{ fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{stats.count}</p>
+                      </div>
+                      <div>
+                        <p className="label" style={{ marginBottom: 4 }}>Win rate</p>
+                        <p style={{ fontSize: 22, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: stats.winRate >= 50 ? 'var(--profit)' : 'var(--loss)' }}>{stats.winRate.toFixed(1)}%</p>
+                      </div>
+                      <div>
+                        <p className="label" style={{ marginBottom: 4 }}>Total return</p>
+                        <p style={{ fontSize: 18, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: stats.totalReturn >= 0 ? 'var(--profit)' : 'var(--loss)' }}>{stats.totalReturn >= 0 ? '+' : ''}{stats.totalReturn.toFixed(2)}%</p>
+                      </div>
+                      <div>
+                        <p className="label" style={{ marginBottom: 4 }}>Avg per trade</p>
+                        <p style={{ fontSize: 18, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: stats.avgReturn >= 0 ? 'var(--profit)' : 'var(--loss)' }}>{stats.avgReturn >= 0 ? '+' : ''}{stats.avgReturn.toFixed(3)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {hasConfidenceData && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                {confBands.map(band => (
+                  <div key={band.label} className="card" style={{ padding: 24 }}>
+                    <div style={{ marginBottom: 16 }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Confidence {band.range}</p>
+                      <p className="label" style={{ marginTop: 2 }}>{band.count} trade{band.count !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div>
+                        <p className="label" style={{ marginBottom: 2 }}>Win rate</p>
+                        <p style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: band.winRate >= 50 ? 'var(--profit)' : band.count === 0 ? 'var(--text-muted)' : 'var(--loss)' }}>
+                          {band.count === 0 ? '—' : `${band.winRate.toFixed(1)}%`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="label" style={{ marginBottom: 2 }}>Total return</p>
+                        <p style={{ fontSize: 16, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: band.totalReturn >= 0 ? 'var(--profit)' : band.count === 0 ? 'var(--text-muted)' : 'var(--loss)' }}>
+                          {band.count === 0 ? '—' : `${band.totalReturn >= 0 ? '+' : ''}${band.totalReturn.toFixed(2)}%`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ height: 20 }} />
       </div>
