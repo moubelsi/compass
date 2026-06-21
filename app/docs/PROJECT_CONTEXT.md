@@ -4,6 +4,17 @@ De Bijbel van Compass
 
 ## Project Overview
 
+# Compass Rules
+
+Always read:
+- PROJECT_CONTEXT.md
+- PROJECT_STATUS.md
+- ROADMAP.md
+- DESIGN_GUIDE.md
+- CHANGELOG.md
+
+before making major changes.
+
 Compass is a Trading Performance Operating System.
 
 Compass is not a traditional trading journal.

@@ -2,6 +2,52 @@
 
 ---
 
+## 2026-06-21 — Behaviour display + Settings page
+
+### Feature: Trade detail page now shows trade_type and confidence
+
+**Files changed**
+- `app/(app)/trades/[id]/page.tsx`
+
+**What changed**
+- Added `Activity` icon to imports
+- Left column restructured from a single Setup details card to a stacked flex column: Setup details card on top, conditional Behaviour card below
+- Behaviour card renders only when `trade.trade_type` or `trade.confidence` is non-null (no empty card for trades logged before these fields existed)
+- `trade_type` shown as a coloured row value: Planned → `var(--profit)`, Impulsive → `var(--loss)`
+- `confidence` shown as `X / 10` with colour based on level: ≥7 green, ≥4 amber (#B45309), <4 red
+
+**Why**
+`trade_type` and `confidence` were being collected and stored but never displayed on the detail page. Users had no way to see the behaviour data they logged after saving a trade.
+
+**New dependencies**
+None
+
+---
+
+### Fix: Settings page now functional
+
+**Files changed**
+- `app/(app)/settings/page.tsx` (full rewrite from stub)
+
+**What changed**
+Replaced the "Coming soon" placeholder with a working settings page containing two sections:
+
+1. **Account** — displays the authenticated user's email (read-only, fetched via `supabase.auth.getUser()`)
+2. **Change password** — new password + confirm fields with:
+   - Client-side validation (both fields required, min 8 chars, passwords must match)
+   - Calls `supabase.auth.updateUser({ password })` on submit
+   - Inline success banner on update
+   - Inline error banner on failure
+   - Inputs clear and loading state set during the request
+
+**Why**
+The settings page was a stub that showed "Coming soon" with no functionality. The sidebar nav linked to it, creating a dead end.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — Project health fixes
 
 ### Fix: Delete trade now handles errors and only redirects on success

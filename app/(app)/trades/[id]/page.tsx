@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Edit3, Trash2, ImageIcon, FileText, BarChart2, Star } from 'lucide-react'
+import { ArrowLeft, Edit3, Trash2, ImageIcon, FileText, BarChart2, Star, Activity } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
@@ -155,19 +155,48 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
 
         {/* Bottom grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          {/* Setup details */}
-          <div className="card" style={{ padding: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-              <BarChart2 size={15} style={{ color: 'var(--text-muted)' }} />
-              <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Setup details</p>
+          {/* Left: Setup details + Behaviour */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="card" style={{ padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <BarChart2 size={15} style={{ color: 'var(--text-muted)' }} />
+                <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Setup details</p>
+              </div>
+              {trade.strategy && <Row label="Strategy" value={trade.strategy} />}
+              <Row label="Followed plan" value={trade.followed_plan ? 'Yes' : 'No'} />
+              {trade.stop_loss != null && <Row label="Stop loss" value={String(trade.stop_loss)} color="var(--loss)" />}
+              {trade.take_profit != null && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Take profit</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--profit)', fontVariantNumeric: 'tabular-nums' }}>{trade.take_profit}</span>
+                </div>
+              )}
             </div>
-            {trade.strategy && <Row label="Strategy" value={trade.strategy} />}
-            <Row label="Followed plan" value={trade.followed_plan ? 'Yes' : 'No'} />
-            {trade.stop_loss != null && <Row label="Stop loss" value={String(trade.stop_loss)} color="var(--loss)" />}
-            {trade.take_profit != null && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12 }}>
-                <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Take profit</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--profit)', fontVariantNumeric: 'tabular-nums' }}>{trade.take_profit}</span>
+
+            {(trade.trade_type || trade.confidence != null) && (
+              <div className="card" style={{ padding: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Activity size={15} style={{ color: 'var(--text-muted)' }} />
+                  <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Behaviour</p>
+                </div>
+                {trade.trade_type && (
+                  <Row
+                    label="Trade type"
+                    value={trade.trade_type.charAt(0).toUpperCase() + trade.trade_type.slice(1)}
+                    color={trade.trade_type === 'planned' ? 'var(--profit)' : 'var(--loss)'}
+                  />
+                )}
+                {trade.confidence != null && (
+                  <Row
+                    label="Confidence"
+                    value={`${trade.confidence} / 10`}
+                    color={
+                      Number(trade.confidence) >= 7 ? 'var(--profit)' :
+                      Number(trade.confidence) >= 4 ? '#B45309' :
+                      'var(--loss)'
+                    }
+                  />
+                )}
               </div>
             )}
           </div>
