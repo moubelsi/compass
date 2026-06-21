@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Check, ChevronDown, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -60,6 +60,10 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [existingScreenshot, setExistingScreenshot] = useState<string | null>(null)
+  const [newScreenshot, setNewScreenshot] = useState<File | null>(null)
+  const [removeScreenshot, setRemoveScreenshot] = useState(false)
+  const screenshotRef = useRef<HTMLInputElement>(null)
   const [f, setF] = useState({
     symbol: '', direction: '' as 'LONG'|'SHORT'|'',
     assetType: 'Indices',
@@ -92,6 +96,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           date: data.trade_date || data.created_at?.split('T')[0] || '',
           rr: data.rr?.toString() || '',
         })
+        const url = data.screenshot_url
+        if (url && url !== 'EMPTY') setExistingScreenshot(url)
       }
       setLoading(false)
     }
@@ -122,6 +128,25 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
     setSaving(true)
     setError('')
     try {
+      // Resolve final screenshot URL
+      let screenshotUrl: string | null = existingScreenshot
+      if (removeScreenshot) {
+        screenshotUrl = null
+      } else if (newScreenshot) {
+        if (newScreenshot.size > 10 * 1024 * 1024) {
+          setError('Screenshot must be under 10 MB.')
+          setSaving(false)
+          return
+        }
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { setError('Session expired. Please sign in again.'); setSaving(false); return }
+        const ext = newScreenshot.name.split('.').pop() ?? 'png'
+        const path = `${user.id}/${Date.now()}.${ext}`
+        const { error: uploadError } = await supabase.storage.from('screenshots').upload(path, newScreenshot)
+        if (uploadError) throw uploadError
+        screenshotUrl = supabase.storage.from('screenshots').getPublicUrl(path).data.publicUrl
+      }
+
       const rrValue = f.rr ? parseFloat(f.rr) : autoRR ? parseFloat(autoRR) : null
       const { error: updateError } = await supabase.from('trades').update({
         symbol: f.symbol.toUpperCase(),
@@ -137,6 +162,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         trade_type: f.trade_type || null,
         confidence: f.confidence || null,
         notes: f.notes || null,
+        screenshot_url: screenshotUrl,
         return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : null,
         rr: rrValue,
         trade_date: f.date || null,
@@ -302,6 +328,31 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               <div>
                 <Label>Notes</Label>
                 <textarea className="input" rows={5} value={f.notes} onChange={e => upd('notes', e.target.value)} style={{ lineHeight: 1.6, resize: 'none', fontSize: 14 }} />
+              </div>
+
+              <div>
+                <Label>Screenshot</Label>
+                {existingScreenshot && !removeScreenshot && (
+                  <div style={{ marginBottom: 10 }}>
+                    <img src={existingScreenshot} alt="Current screenshot" style={{ width: '100%', borderRadius: 6, border: '1px solid var(--border-subtle)', marginBottom: 8 }} />
+                    <button type="button" onClick={() => setRemoveScreenshot(true)} style={{ fontSize: 12, color: 'var(--loss)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      Remove screenshot
+                    </button>
+                  </div>
+                )}
+                {removeScreenshot && (
+                  <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Screenshot will be removed on save.</span>
+                    <button type="button" onClick={() => setRemoveScreenshot(false)} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Undo</button>
+                  </div>
+                )}
+                {newScreenshot && (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{newScreenshot.name}</p>
+                )}
+                <input ref={screenshotRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { setNewScreenshot(e.target.files?.[0] ?? null); setRemoveScreenshot(false) }} />
+                <button type="button" onClick={() => screenshotRef.current?.click()} className="btn-secondary" style={{ fontSize: 13, width: '100%', justifyContent: 'center' }}>
+                  {newScreenshot ? 'Change screenshot' : existingScreenshot && !removeScreenshot ? 'Replace screenshot' : 'Upload screenshot'}
+                </button>
               </div>
             </div>
           </div>

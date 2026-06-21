@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-06-21 — Screenshot upload on edit
+
+### Feature: Edit trade now supports screenshot upload
+
+**Files changed**
+- `app/(app)/trades/[id]/edit/page.tsx`
+
+**What changed**
+Added screenshot management to the edit form (Analysis card, below Notes):
+
+- **Load**: existing `screenshot_url` is fetched from the trade and displayed as a thumbnail
+- **Replace**: clicking "Replace screenshot" opens a file picker; selecting a file uploads it to the `screenshots` Supabase Storage bucket on save and replaces the URL
+- **Remove**: "Remove screenshot" link marks the screenshot for deletion; an Undo option is shown until save
+- **New upload**: if no existing screenshot, button shows "Upload screenshot"
+- **Validation**: file size capped at 10 MB; error shown inline if exceeded
+- **Session guard**: calls `supabase.auth.getUser()` before upload (only when a new file is selected)
+
+`screenshot_url` is now explicitly included in the Supabase `update()` call, resolving to:
+- `null` if removed
+- new public URL if replaced/uploaded
+- existing URL if unchanged
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — Behaviour Analytics (Phase 3)
 
 ### Feature: Behaviour section on analytics page
