@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, ArrowDownRight, Search, SlidersHorizontal } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Search, SlidersHorizontal, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 type Direction = 'LONG' | 'SHORT'
@@ -78,9 +78,14 @@ export default function TradesPage() {
               </div>
             )}
           </div>
-          <Link href="/trades/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
-            + Log trade
-          </Link>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Link href="/trades/import" className="btn-secondary" style={{ fontSize: 14, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 7, textDecoration: 'none' }}>
+              <Upload size={13} />Import
+            </Link>
+            <Link href="/trades/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
+              + Log trade
+            </Link>
+          </div>
         </div>
       </div>
 

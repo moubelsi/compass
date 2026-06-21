@@ -2,6 +2,47 @@
 
 ---
 
+## 2026-06-21 — cTrader CSV Import
+
+### Feature: Import cTrader closed positions CSV
+
+**Files changed**
+- `app/(app)/trades/import/page.tsx` (new)
+- `app/(app)/trades/page.tsx`
+
+**What changed**
+
+New page at `/trades/import` with a three-step flow:
+
+1. **Upload** — drag-and-drop or click-to-browse drop zone, accepts `.csv` files
+2. **Preview** — parsed trades displayed in a table (Symbol, Direction, Date, Entry, Exit, P&L); capped at 50 rows for large files, all rows still imported
+3. **Import** — single Supabase `insert` of all rows, then redirect to `/trades`
+
+**Parser supports:**
+- UTF-8 BOM stripping
+- Auto-detects separator (`;` or `,`)
+- Case-insensitive column matching with fallback names (e.g. "Open Price" / "Entry Price" / "open_price")
+- Direction mapping: "Buy"/"buy limit" etc → `LONG`, "Sell"/"sell stop" etc → `SHORT`
+- Date extraction: prefers `Close Time`, falls back to `Open Time`; handles `YYYY-MM-DD HH:MM:SS` format
+- Skips summary/totals rows and any row missing required fields
+- Clear error messages for unrecognised formats
+
+**Fields imported:** `symbol`, `direction`, `entry_price`, `exit_price`, `pnl`, `trade_date`, `followed_plan` (set to false)
+
+**Fields left null:** `return_pct`, `rr`, `strategy`, `trade_type`, `confidence`, `notes`, `screenshot_url`, `stop_loss`, `take_profit` — can be filled via the edit form per trade.
+
+**Trades page** — added an "Import" button (`/trades/import`) next to "Log trade" in the page header. Uses the `Upload` lucide icon.
+
+**Instructions card** included on the import page explaining how to export from cTrader (History → right-click → Export CSV → Closed Positions).
+
+**Why**
+Phase 2 roadmap item. Manual trade entry is the biggest friction point for new users who already have a trading history in cTrader. Bulk import removes that barrier.
+
+**New dependencies**
+None — CSV parsing is done client-side without a library.
+
+---
+
 ## 2026-06-21 — Discipline Score
 
 ### Feature: Discipline Score on dashboard
