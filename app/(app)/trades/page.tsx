@@ -18,6 +18,7 @@ interface Trade {
   trade_date: string | null
   created_at: string
   trade_type: 'planned' | 'impulsive' | null
+  screenshot_url: string | null
 }
 
 const DIRECTION_OPTS = ['All', 'LONG', 'SHORT'] as const
@@ -34,7 +35,7 @@ export default function TradesPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, direction, strategy, pnl, return_pct, rr, trade_date, created_at, trade_type')
+        .select('id, symbol, direction, strategy, pnl, return_pct, rr, trade_date, created_at, trade_type, screenshot_url')
         .order('trade_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
       setTrades((data as Trade[]) || [])
@@ -195,15 +196,23 @@ export default function TradesPage() {
                 >
                   {/* Symbol + direction */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 7,
-                      background: up ? 'var(--profit-dim)' : 'var(--loss-dim)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
-                      {up
-                        ? <ArrowUpRight size={15} style={{ color: 'var(--profit)' }} />
-                        : <ArrowDownRight size={15} style={{ color: 'var(--loss)' }} />}
-                    </div>
+                    {t.screenshot_url && t.screenshot_url !== 'EMPTY' ? (
+                      <img
+                        src={t.screenshot_url}
+                        alt=""
+                        style={{ width: 52, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border-subtle)' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 7,
+                        background: up ? 'var(--profit-dim)' : 'var(--loss-dim)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        {up
+                          ? <ArrowUpRight size={15} style={{ color: 'var(--profit)' }} />
+                          : <ArrowDownRight size={15} style={{ color: 'var(--loss)' }} />}
+                      </div>
+                    )}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
