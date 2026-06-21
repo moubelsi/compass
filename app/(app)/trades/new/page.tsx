@@ -88,9 +88,19 @@ export default function NewTradePage() {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setError('Session expired. Please sign in again.')
+        setSaving(false)
+        return
+      }
 
       let screenshot_url = null
       if (screenshot) {
+        if (screenshot.size > 10 * 1024 * 1024) {
+          setError('Screenshot must be under 10MB.')
+          setSaving(false)
+          return
+        }
         const ext = screenshot.name.split('.').pop()
         const path = `${user?.id}/${Date.now()}.${ext}`
         const { error: uploadError } = await supabase.storage

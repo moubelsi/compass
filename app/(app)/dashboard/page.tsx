@@ -53,7 +53,8 @@ export default function DashboardPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('*')
+        .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type')
+        .order('trade_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
       setTrades(data || [])
       setLoading(false)
@@ -73,15 +74,33 @@ export default function DashboardPage() {
   const equityData = [...trades].reverse().reduce((acc: any[], trade, i) => {
     const prev = acc[i - 1]?.value || 0
     acc.push({
-      date: new Date(trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: prev + Number(trade.pnl || 0)
     })
     return acc
   }, [])
 
-  const todayTrades = trades.filter(t => new Date(t.created_at).toDateString() === new Date().toDateString())
+  const todayTrades = trades.filter(t => {
+    const d = t.trade_date || t.created_at
+    return new Date(d).toDateString() === new Date().toDateString()
+  })
   const todayReturn = todayTrades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
   const recentTrades = trades.slice(0, 6)
+
+  const insightText = (() => {
+    if (totalTrades === 0) return 'Log your first trade to unlock performance insights.'
+    const planned = trades.filter(t => t.trade_type === 'planned')
+    const impulsive = trades.filter(t => t.trade_type === 'impulsive')
+    if (planned.length + impulsive.length === 0) {
+      return `${totalTrades} trade${totalTrades !== 1 ? 's' : ''} logged. Add trade type (Planned / Impulsive) when logging to unlock behaviour insights.`
+    }
+    const plannedWR = planned.length > 0 ? (planned.filter(t => Number(t.pnl) > 0).length / planned.length * 100).toFixed(0) : null
+    const impulsiveWR = impulsive.length > 0 ? (impulsive.filter(t => Number(t.pnl) > 0).length / impulsive.length * 100).toFixed(0) : null
+    if (plannedWR !== null && impulsiveWR !== null) {
+      return `Planned trades: ${plannedWR}% win rate (${planned.length}). Impulsive trades: ${impulsiveWR}% win rate (${impulsive.length}).`
+    }
+    return `${planned.length + impulsive.length} of ${totalTrades} trades have trade type logged.`
+  })()
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
@@ -175,8 +194,7 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
           {/* Insights */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <InsightCard text="You perform best during London session trades. Your win rate drops significantly after 3 PM." />
-            <InsightCard text="Planned trades account for 89% of your total profit. Impulsive trades are your biggest leak." />
+            <InsightCard text={insightText} />
             <div className="card" style={{ padding: '24px 28px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: 12 }}>
               <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>AI Coach</p>
               <p style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>Deeper insights available as you log more trades.</p>

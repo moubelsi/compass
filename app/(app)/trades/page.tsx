@@ -35,6 +35,7 @@ export default function TradesPage() {
       const { data } = await supabase
         .from('trades')
         .select('id, symbol, direction, strategy, pnl, return_pct, rr, trade_date, created_at, trade_type')
+        .order('trade_date', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
       setTrades((data as Trade[]) || [])
       setLoading(false)

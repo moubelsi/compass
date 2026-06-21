@@ -20,6 +20,8 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
   const { id } = use(params)
   const [trade, setTrade] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -37,7 +39,14 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
 
   async function handleDelete() {
     if (!confirm('Delete this trade?')) return
-    await supabase.from('trades').delete().eq('id', id)
+    setDeleting(true)
+    setDeleteError('')
+    const { error } = await supabase.from('trades').delete().eq('id', id)
+    if (error) {
+      setDeleting(false)
+      setDeleteError('Failed to delete trade. Please try again.')
+      return
+    }
     router.push('/trades')
   }
 
@@ -74,14 +83,17 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
           <Link href={`/trades/${id}/edit`} className="btn-secondary" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
             <Edit3 size={14} />Edit trade
           </Link>
-          <button className="btn-ghost" style={{ fontSize: 14, color: 'var(--loss)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleDelete}>
-            <Trash2 size={14} />Delete
+          <button className="btn-ghost" style={{ fontSize: 14, color: 'var(--loss)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleDelete} disabled={deleting}>
+            <Trash2 size={14} />{deleting ? 'Deleting…' : 'Delete'}
           </button>
         </div>
       </div>
 
       {/* Content — padded to clear the fixed nav */}
       <div style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
+        {deleteError && (
+          <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{deleteError}</div>
+        )}
         {/* Hero */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
           {/* Left */}

@@ -39,7 +39,11 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('trades').select('*').order('created_at', { ascending: true })
+      const { data } = await supabase
+        .from('trades')
+        .select('id, symbol, pnl, rr, strategy, created_at, trade_date')
+        .order('trade_date', { ascending: true, nullsFirst: true })
+        .order('created_at', { ascending: true })
       setTrades(data || [])
       setLoading(false)
     }
@@ -66,7 +70,7 @@ export default function AnalyticsPage() {
   const equityData = trades.reduce((acc: any[], trade, i) => {
     const prev = acc[i - 1]?.value || 0
     acc.push({
-      date: new Date(trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       value: prev + Number(trade.pnl || 0)
     })
     return acc
