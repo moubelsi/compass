@@ -12,6 +12,7 @@ interface ParsedTrade {
   entry_price: number
   exit_price: number
   pnl: number | null
+  return_pct: number | null
   trade_date: string | null
 }
 
@@ -55,6 +56,8 @@ function parseCSV(text: string): ParsedTrade[] {
   // FIX 5: fallback — find any column starting with "net " (covers "net eur", "net usd", "net gbp", …)
   const netCurrencyIdx = netProfitIdx >= 0 ? netProfitIdx : cols.findIndex(c => c.startsWith('net '))
   const profitIdx = netCurrencyIdx >= 0 ? netCurrencyIdx : grossProfitIdx
+  // Balance column — used to compute return_pct: "Balance EUR", "Balance USD", etc.
+  const balanceIdx = cols.findIndex(c => c.startsWith('balance '))
 
   if (symbolIdx < 0)     throw new Error('Cannot find a "Symbol" column. Is this a cTrader CSV export?')
   if (dirIdx < 0)        throw new Error('Cannot find a "Direction" or "Opening Direction" column.')
@@ -81,6 +84,11 @@ function parseCSV(text: string): ParsedTrade[] {
     const pnlRaw = profitIdx >= 0 ? parseFloat(cells[profitIdx]) : NaN
     const pnl = isNaN(pnlRaw) ? null : pnlRaw
 
+    // return_pct = pnl / balance_before * 100, where balance_before = balance_after - pnl
+    const balanceAfter = balanceIdx >= 0 ? parseFloat(cells[balanceIdx]) : NaN
+    const balanceBefore = (!isNaN(balanceAfter) && !isNaN(pnlRaw)) ? balanceAfter - pnlRaw : NaN
+    const return_pct = (balanceBefore > 0 && !isNaN(pnlRaw)) ? (pnlRaw / balanceBefore) * 100 : null
+
     const rawDate = closeTimeIdx >= 0 ? cells[closeTimeIdx] : openTimeIdx >= 0 ? cells[openTimeIdx] : null
     let trade_date: string | null = null
     if (rawDate) {
@@ -93,7 +101,7 @@ function parseCSV(text: string): ParsedTrade[] {
       }
     }
 
-    trades.push({ symbol, direction, entry_price, exit_price, pnl, trade_date })
+    trades.push({ symbol, direction, entry_price, exit_price, pnl, return_pct, trade_date })
   }
 
   if (trades.length === 0) throw new Error('No valid trades found in the file. Check that you exported "Closed Positions" and not Deals or Orders.')
@@ -137,13 +145,14 @@ export default function ImportPage() {
     if (!user) { setError('Session expired. Please sign in again.'); setStep('preview'); return }
 
     const rows = trades.map(t => ({
-      user_id:      user.id,
-      symbol:       t.symbol,
-      direction:    t.direction,
-      entry_price:  t.entry_price,
-      exit_price:   t.exit_price,
-      pnl:          t.pnl,
-      trade_date:   t.trade_date,
+      user_id:       user.id,
+      symbol:        t.symbol,
+      direction:     t.direction,
+      entry_price:   t.entry_price,
+      exit_price:    t.exit_price,
+      pnl:           t.pnl,
+      return_pct:    t.return_pct,
+      trade_date:    t.trade_date,
       followed_plan: false,
     }))
 
@@ -223,8 +232,8 @@ export default function ImportPage() {
             </div>
 
             <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.2fr 1fr 1fr 1fr', padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
-                {['Symbol', 'Direction', 'Date', 'Entry', 'Exit', 'P&L'].map(h => (
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.2fr 1fr 1fr 1fr 1fr', padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                {['Symbol', 'Direction', 'Date', 'Entry', 'Exit', 'P&L', 'Return'].map(h => (
                   <p key={h} style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{h}</p>
                 ))}
               </div>
@@ -232,7 +241,7 @@ export default function ImportPage() {
               {previewRows.map((t, i) => (
                 <div
                   key={i}
-                  style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1.2fr 1fr 1fr 1fr', padding: '12px 20px', borderBottom: i < previewRows.length - 1 ? '1px solid var(--border-subtle)' : 'none', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1.2fr 1fr 1fr 1fr 1fr', padding: '12px 20px', borderBottom: i < previewRows.length - 1 ? '1px solid var(--border-subtle)' : 'none', alignItems: 'center' }}
                 >
                   <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
                   <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 500, padding: '2px 7px', borderRadius: 4, width: 'fit-content', background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)' }}>
@@ -244,7 +253,10 @@ export default function ImportPage() {
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{t.entry_price}</span>
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{t.exit_price}</span>
                   <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: t.pnl == null ? 'var(--text-muted)' : t.pnl >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
-                    {t.pnl == null ? '—' : `${t.pnl >= 0 ? '+' : '-'}$${Math.abs(t.pnl).toFixed(2)}`}
+                    {t.pnl == null ? '—' : `${t.pnl >= 0 ? '+' : '-'}€${Math.abs(t.pnl).toFixed(2)}`}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: t.return_pct == null ? 'var(--text-muted)' : t.return_pct >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
+                    {t.return_pct == null ? '—' : `${t.return_pct >= 0 ? '+' : ''}${t.return_pct.toFixed(3)}%`}
                   </span>
                 </div>
               ))}
