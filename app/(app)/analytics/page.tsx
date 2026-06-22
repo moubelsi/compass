@@ -19,6 +19,20 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, letterSpacing: '-0.01em' }}>{children}</h2>
 }
 
+function MonthTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px' }}>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ fontSize: 13, fontWeight: 500, color: p.name === 'Wins' ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
+          {p.name}: {p.value}
+        </p>
+      ))}
+    </div>
+  )
+}
+
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
   return (
@@ -132,6 +146,36 @@ export default function AnalyticsPage() {
     { label: 'Mid',  range: '5–7',  group: confTrades.filter(t => Number(t.confidence) >= 5 && Number(t.confidence) <= 7) },
     { label: 'High', range: '8–10', group: confTrades.filter(t => Number(t.confidence) >= 8) },
   ].map(b => ({ ...b, ...bStats(b.group) }))
+
+  // Long vs Short
+  const longs  = trades.filter(t => t.direction === 'LONG')
+  const shorts = trades.filter(t => t.direction === 'SHORT')
+
+  // Monthly wins vs losses
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const monthMap: Record<string, { name: string; wins: number; losses: number }> = {}
+  trades.forEach(t => {
+    const d = new Date(t.trade_date || t.created_at)
+    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`
+    if (!monthMap[key]) monthMap[key] = { name: `${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}`, wins: 0, losses: 0 }
+    if (Number(t.pnl) > 0) monthMap[key].wins++
+    else monthMap[key].losses++
+  })
+  const monthlyData = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v)
+
+  // Symbol breakdown
+  const symMap: Record<string, { name: string; count: number; wins: number; losses: number; pnl: number }> = {}
+  trades.forEach(t => {
+    const sym = (t.symbol || 'Unknown').toUpperCase()
+    if (!symMap[sym]) symMap[sym] = { name: sym, count: 0, wins: 0, losses: 0, pnl: 0 }
+    symMap[sym].count++
+    if (Number(t.pnl) > 0) symMap[sym].wins++
+    else symMap[sym].losses++
+    symMap[sym].pnl += Number(t.pnl || 0)
+  })
+  const symbolData = Object.values(symMap).sort((a, b) => b.count - a.count)
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
@@ -299,6 +343,82 @@ export default function AnalyticsPage() {
             })}
           </div>
         </div>
+
+        {/* Long vs Short */}
+        <div>
+          <SectionTitle>Long vs Short</SectionTitle>
+          <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+              {['Direction', 'Trades', 'Win rate', 'Winning', 'Losing'].map(h => (
+                <p key={h} className="label" style={{ textAlign: h === 'Direction' ? 'left' : 'right' }}>{h}</p>
+              ))}
+            </div>
+            {[{ label: 'LONG', group: longs }, { label: 'SHORT', group: shorts }].map(({ label, group }, i) => {
+              const w = group.filter(t => Number(t.pnl) > 0)
+              const l = group.filter(t => Number(t.pnl) <= 0)
+              const wr = group.length > 0 ? (w.length / group.length) * 100 : 0
+              return (
+                <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', padding: '14px 24px', borderBottom: i === 0 ? '1px solid var(--border-subtle)' : 'none' }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: label === 'LONG' ? 'var(--profit)' : 'var(--loss)' }}>{label}</span>
+                  <span style={{ fontSize: 14, color: 'var(--text-secondary)', textAlign: 'right' }}>{group.length}</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: wr >= 50 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{group.length > 0 ? `${wr.toFixed(1)}%` : '—'}</span>
+                  <span style={{ fontSize: 14, color: 'var(--profit)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{w.length}{group.length > 0 ? ` (${wr.toFixed(1)}%)` : ''}</span>
+                  <span style={{ fontSize: 14, color: 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{l.length}{group.length > 0 ? ` (${(100 - wr).toFixed(1)}%)` : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Monthly wins vs losses */}
+        {monthlyData.length > 0 && (
+          <div>
+            <SectionTitle>Monthly performance</SectionTitle>
+            <div className="card" style={{ padding: 24, height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 4, right: 4, bottom: 4, left: -10 }}>
+                  <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip content={<MonthTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                  <Bar dataKey="wins" name="Wins" fill="var(--profit)" fillOpacity={0.8} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="losses" name="Losses" fill="var(--loss)" fillOpacity={0.8} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 10, justifyContent: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--profit)', display: 'inline-block' }} />Wins</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}><span style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--loss)', display: 'inline-block' }} />Losses</span>
+            </div>
+          </div>
+        )}
+
+        {/* Symbol breakdown */}
+        {symbolData.length > 0 && (
+          <div>
+            <SectionTitle>Symbol breakdown</SectionTitle>
+            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                {['Symbol', 'Trades', 'Win rate', 'Winning', 'Losing', 'Total P&L'].map(h => (
+                  <p key={h} className="label" style={{ textAlign: h === 'Symbol' ? 'left' : 'right' }}>{h}</p>
+                ))}
+              </div>
+              {symbolData.map((s, i) => {
+                const wr = s.count > 0 ? (s.wins / s.count) * 100 : 0
+                return (
+                  <div key={s.name} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', padding: '14px 24px', borderBottom: i < symbolData.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>{s.name}</span>
+                    <span style={{ fontSize: 14, color: 'var(--text-secondary)', textAlign: 'right' }}>{s.count}</span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: wr >= 50 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{wr.toFixed(1)}%</span>
+                    <span style={{ fontSize: 14, color: 'var(--profit)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.wins} ({wr.toFixed(1)}%)</span>
+                    <span style={{ fontSize: 14, color: 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.losses} ({(100 - wr).toFixed(1)}%)</span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.pnl >= 0 ? '+' : ''}€{Math.abs(s.pnl).toFixed(2)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Behaviour */}
         {(hasBehaviourData || hasConfidenceData) && (

@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-06-22 — Analytics: Long/Short, Monthly chart, Symbol breakdown
+
+### Feature: Three new analytics sections
+
+**Files changed**
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+
+**Long vs Short** — table showing LONG and SHORT rows with: trades count, win rate, winning count + %, losing count + %.
+
+**Monthly performance** — grouped bar chart (green = wins, red = losses per month) ordered chronologically. Includes a small colour legend below the chart. Only renders when data exists.
+
+**Symbol breakdown** — table sorted by trade count showing per-symbol: trades, win rate, winning count + %, losing count + %, total P&L in €. Mirrors the style of the existing Strategy breakdown table.
+
+Volume / average deal size stats from the cTrader screenshot were intentionally skipped — lot size is not stored for imported trades.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-21 — Screenshot upload on edit
 
 ### Feature: Edit trade now supports screenshot upload
