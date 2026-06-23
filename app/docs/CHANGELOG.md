@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-06-23 — Dark mode, trade detail fixes, new trade form fields
+
+### Polish + fixes
+
+**Files changed**
+- `components/layout/AppShell.tsx`
+- `app/globals.css`
+- `app/(app)/trades/[id]/page.tsx`
+- `app/(app)/trades/new/page.tsx`
+
+**What changed**
+
+**Dark mode toggle**: Added `useDarkMode` hook (reads `localStorage` + system preference on first visit). Toggle button (sun/moon icon) added to sidebar header on desktop and to the mobile top bar. Persisted to `localStorage`.
+
+**Trade detail page — two fixes**:
+- Fixed nav bar had `left: 240` hardcoded, breaking on mobile. Replaced with `.page-fixed-bar` CSS class (`left: var(--sidebar-width)`) with a mobile override (`left: 0; top: var(--header-height)`).
+- Date was showing `created_at` instead of `trade_date`. Fixed to use `trade_date + T12:00:00` with fallback.
+
+**New trade form — behaviour fields added**: `trade_type` (Planned / Impulsive toggle) and `confidence` (1–10 colour-coded buttons) added to the Analysis card. Previously, only trades edited after logging could have these fields — analytics was blind to trades logged directly. Both fields now saved to the database.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-23 — Design polish: mobile nav + consistency pass
 
 ### Polish: full app design consistency

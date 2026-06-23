@@ -63,10 +63,9 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Fixed nav bar */}
-      <div style={{
+      <div className="page-fixed-bar" style={{
         position: 'fixed',
         top: 0,
-        left: 240,
         right: 0,
         zIndex: 30,
         display: 'flex',
@@ -103,7 +102,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
                 <h1 style={{ fontSize: 32, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>{trade.symbol?.toUpperCase()}</h1>
                 <span style={{ fontSize: 12, fontWeight: 500, padding: '3px 8px', borderRadius: 5, background: trade.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: trade.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)' }}>{trade.direction}</span>
               </div>
-              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{new Date(trade.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{new Date((trade.trade_date ? trade.trade_date + 'T12:00:00' : trade.created_at)).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>

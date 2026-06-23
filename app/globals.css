@@ -234,6 +234,10 @@ body {
   .animate-fade-up { animation: none; }
 }
 
+.page-fixed-bar {
+  left: var(--sidebar-width);
+}
+
 @media (min-width: 769px) {
   .mobile-nav    { display: none !important; }
   .mobile-header { display: none !important; }
@@ -241,5 +245,6 @@ body {
 
 @media (max-width: 768px) {
   .desktop-sidebar { display: none !important; }
+  .page-fixed-bar  { left: 0 !important; top: var(--header-height) !important; }
   main { padding-left: 0 !important; padding-top: 52px !important; padding-bottom: 64px !important; }
 }

@@ -20,6 +20,8 @@ interface Form {
   assetType: string
   entry: string; exit: string; sl: string; tp: string; size: string
   strategy: string; score: number; followed_plan: boolean
+  trade_type: 'planned'|'impulsive'|''
+  confidence: number
   notes: string; date: string; rr: string
 }
 
@@ -54,6 +56,7 @@ export default function NewTradePage() {
     symbol: '', direction: '', assetType: 'Indices',
     entry: '', exit: '', sl: '', tp: '', size: '',
     strategy: '', score: 0, followed_plan: true,
+    trade_type: '', confidence: 0,
     notes: '', date: new Date().toISOString().split('T')[0], rr: ''
   })
 
@@ -126,6 +129,8 @@ export default function NewTradePage() {
         strategy: f.strategy || null,
         setup_score: f.score || null,
         followed_plan: f.followed_plan,
+        trade_type: f.trade_type || null,
+        confidence: f.confidence || null,
         notes: f.notes || null,
         return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : null,
         rr: rrValue,
@@ -265,6 +270,24 @@ export default function NewTradePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {[true, false].map(v => (
                     <button key={String(v)} type="button" onClick={() => upd('followed_plan', v)} style={{ padding: '10px', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s', background: f.followed_plan === v ? 'var(--accent-dim)' : 'var(--bg-elevated)', color: f.followed_plan === v ? 'var(--accent)' : 'var(--text-secondary)', border: `1px solid ${f.followed_plan === v ? 'rgba(47,128,237,0.25)' : 'var(--border-subtle)'}` }}>{v ? 'Yes' : 'No'}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>Trade type</Label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {(['planned', 'impulsive'] as const).map(t => (
+                    <button key={t} type="button" onClick={() => upd('trade_type', f.trade_type === t ? '' : t)} style={{ padding: '10px', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s', textTransform: 'capitalize', background: f.trade_type === t ? (t === 'planned' ? 'var(--profit-dim)' : 'var(--loss-dim)') : 'var(--bg-elevated)', color: f.trade_type === t ? (t === 'planned' ? 'var(--profit)' : 'var(--loss)') : 'var(--text-secondary)', border: `1px solid ${f.trade_type === t ? (t === 'planned' ? 'rgba(61,153,112,0.25)' : 'rgba(192,57,43,0.25)') : 'var(--border-subtle)'}` }}>{t}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label>Confidence {f.confidence > 0 && <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{f.confidence}/10</span>}</Label>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                    <button key={n} type="button" onClick={() => upd('confidence', f.confidence === n ? 0 : n)} style={{ width: 32, height: 32, borderRadius: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s', background: f.confidence >= n ? (n <= 4 ? 'var(--loss-dim)' : n <= 7 ? 'rgba(180,83,9,0.1)' : 'var(--profit-dim)') : 'var(--bg-elevated)', color: f.confidence >= n ? (n <= 4 ? 'var(--loss)' : n <= 7 ? '#B45309' : 'var(--profit)') : 'var(--text-muted)', border: `1px solid ${f.confidence >= n ? 'transparent' : 'var(--border-subtle)'}` }}>{n}</button>
                   ))}
                 </div>
               </div>
