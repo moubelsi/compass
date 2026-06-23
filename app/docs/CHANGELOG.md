@@ -2,6 +2,44 @@
 
 ---
 
+## 2026-06-23 — AI Coach
+
+### Feature: Real AI-generated trading insights
+
+**Files changed**
+- `app/api/coach/route.ts` (new)
+- `app/(app)/coach/page.tsx`
+- `.env.local` (added `ANTHROPIC_API_KEY` placeholder)
+- `package.json` / `package-lock.json` (added `@anthropic-ai/sdk`)
+
+**What changed**
+
+The AI Coach page was previously hardcoded with dummy insights. It now calls a real API route (`POST /api/coach`) that:
+1. Authenticates the user server-side using `createServerClient` + cookies
+2. Fetches up to 300 of the user's trades from Supabase
+3. Computes a statistics summary: win rate, profit factor, direction breakdown, top strategies, top symbols, planned vs impulsive, confidence bands, recent trend
+4. Sends the summary as a structured prompt to Claude (`claude-sonnet-4-6`)
+5. Parses the JSON response into typed insight objects
+
+**UI changes to coach page:**
+- Replaced hardcoded insights with dynamic state
+- Added "Generate insights" button / empty state with description
+- Loading skeleton cards while Claude analyses
+- "Regenerate" button after insights are shown (top-right)
+- Error display for API failures or insufficient data (< 5 trades)
+- Tabs still work (All / Strength / Watch out / Opportunity / Pattern)
+
+**Setup required:**
+Add your Anthropic API key to `.env.local`:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**New dependencies**
+- `@anthropic-ai/sdk` ^0.x
+
+---
+
 ## 2026-06-22 — Analytics: Long/Short, Monthly chart, Symbol breakdown
 
 ### Feature: Three new analytics sections

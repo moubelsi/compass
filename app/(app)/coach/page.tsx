@@ -1,21 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Sparkles, Flame, AlertTriangle, Lightbulb, Shield } from 'lucide-react'
+import { Sparkles, Flame, AlertTriangle, Lightbulb, Shield, RefreshCw } from 'lucide-react'
 
 interface Insight {
-  id: string; type: 'strength'|'warning'|'opportunity'|'pattern'
+  id: string; type: 'strength' | 'warning' | 'opportunity' | 'pattern'
   category: string; headline: string; detail: string; metric?: string; metricLabel?: string
 }
-
-const INSIGHTS: Insight[] = [
-  { id:'1', type:'strength',    category:'Symbol',    headline:'EURUSD is your strongest pair',          detail:'Win rate of 71% on EURUSD vs 62% overall. This pair consistently generates your best R:R trades.',                      metric:'71%',  metricLabel:'Win rate' },
-  { id:'2', type:'warning',     category:'Time',      headline:'Performance drops after 3 PM',           detail:'You lose 68% of trades taken after 3 PM. Fatigue or thin market conditions may be a factor. Consider a hard stop.',    metric:'68%',  metricLabel:'Loss rate after 3PM' },
-  { id:'3', type:'strength',    category:'Setup',     headline:'London Breakouts are your edge',         detail:'67% win rate and 1.9 avg R:R across 34 London Breakout trades. This is the core of your system.',                      metric:'1.9R', metricLabel:'Avg R:R' },
-  { id:'4', type:'warning',     category:'Risk',      headline:'Stop loss moves are costly',             detail:'On 12% of losing trades you moved your stop. Those averaged −2.1R vs −0.9R when stops were respected.',                metric:'−2.1R',metricLabel:'Avg when SL moved' },
-  { id:'5', type:'opportunity', category:'Frequency', headline:'You overtrade on Fridays',               detail:'40% more trades on Fridays, but win rate drops to 41%. Restricting Fridays to A+ setups only could help significantly.', metric:'41%',  metricLabel:'Friday win rate' },
-  { id:'6', type:'pattern',     category:'Behavior',  headline:'Third trade after a loss underperforms', detail:'After two consecutive losses, your next trade wins only 31% of the time. A cooldown rule could protect capital.',          metric:'31%',  metricLabel:'Win rate after 2 losses' },
-]
 
 const CFG = {
   strength:    { icon: Flame,         color: 'var(--profit)',    bg: 'var(--profit-dim)',    label: 'Strength' },
@@ -26,7 +17,7 @@ const CFG = {
 
 function InsightCard({ insight }: { insight: Insight }) {
   const [open, setOpen] = useState(false)
-  const cfg = CFG[insight.type]
+  const cfg = CFG[insight.type] ?? CFG.pattern
   const Icon = cfg.icon
   return (
     <button onClick={() => setOpen(!open)} style={{ width: '100%', textAlign: 'left', display: 'block', background: 'var(--bg-surface)', border: `1px solid var(--border-subtle)`, borderLeft: open ? `3px solid ${cfg.color}` : '3px solid transparent', borderRadius: 8, padding: 16, cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -53,45 +44,121 @@ function InsightCard({ insight }: { insight: Insight }) {
   )
 }
 
-type Tab = 'All'|'Strength'|'Watch out'|'Opportunity'|'Pattern'
-const TABS: Tab[] = ['All','Strength','Watch out','Opportunity','Pattern']
+function SkeletonCard() {
+  return (
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid transparent', borderRadius: 8, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'var(--bg-elevated)', flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ width: 60, height: 10, borderRadius: 4, background: 'var(--bg-elevated)', marginBottom: 8 }} />
+          <div style={{ width: '75%', height: 13, borderRadius: 4, background: 'var(--bg-elevated)' }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type Tab = 'All' | 'Strength' | 'Watch out' | 'Opportunity' | 'Pattern'
+const TABS: Tab[] = ['All', 'Strength', 'Watch out', 'Opportunity', 'Pattern']
 
 export default function CoachPage() {
   const [tab, setTab] = useState<Tab>('All')
-  const list = tab === 'All' ? INSIGHTS : INSIGHTS.filter(i => CFG[i.type].label === tab)
+  const [insights, setInsights] = useState<Insight[] | null>(null)
+  const [tradeCount, setTradeCount] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function generate() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/coach', { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Something went wrong.'); return }
+      setInsights(json.insights.map((ins: any, i: number) => ({ ...ins, id: String(i) })))
+      setTradeCount(json.tradeCount)
+    } catch {
+      setError('Network error. Check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const list = insights
+    ? (tab === 'All' ? insights : insights.filter(i => (CFG[i.type] ?? CFG.pattern).label === tab))
+    : []
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
+      {/* Header */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <Sparkles size={16} style={{ color: 'var(--ai-accent)' }} />
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>AI Coach</h1>
-          <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>BETA</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Sparkles size={16} style={{ color: 'var(--ai-accent)' }} />
+            <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>AI Coach</h1>
+            <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>BETA</span>
+          </div>
+          {insights && !loading && (
+            <button
+              onClick={generate}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer' }}
+            >
+              <RefreshCw size={11} />Regenerate
+            </button>
+          )}
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{INSIGHTS.length} insights from your last 89 trades</p>
-      </div>
-
-      <div style={{ borderRadius: 8, padding: 14, background: 'var(--bg-elevated)', borderLeft: '3px solid var(--ai-accent)', marginBottom: 16 }}>
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Your biggest edge:</span> London Breakouts on EURUSD before 12 PM.{' '}
-          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>Your biggest leak:</span> Trading after 3 PM and moving stop losses.
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {insights ? `${insights.length} insights from your last ${tradeCount} trades` : 'Personalised coaching from your actual trade data'}
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s', background: tab === t ? 'var(--bg-overlay)' : 'var(--bg-elevated)', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)', border: `1px solid ${tab === t ? 'var(--border-default)' : 'var(--border-subtle)'}` }}>{t}</button>
-        ))}
-      </div>
+      {/* Error */}
+      {error && (
+        <div style={{ padding: '12px 14px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 13, color: 'var(--loss)', marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {list.map(i => <InsightCard key={i.id} insight={i} />)}
-      </div>
+      {/* Loading skeletons */}
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {[0, 1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>Analysing your trades…</p>
+        </div>
+      )}
 
-      <div style={{ borderRadius: 8, padding: 16, background: 'var(--bg-elevated)', textAlign: 'center', marginTop: 16 }}>
-        <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 4 }}>More insights coming</p>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pattern recognition, session analysis, emotional trading detection.</p>
-      </div>
+      {/* Generate prompt */}
+      {!loading && !insights && (
+        <div style={{ borderRadius: 10, padding: 28, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', textAlign: 'center', marginBottom: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--ai-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+            <Sparkles size={20} style={{ color: 'var(--ai-accent)' }} />
+          </div>
+          <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>Ready to analyse your trades</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>Claude will identify your edge, behavioural patterns, and specific risks based on your real journal data.</p>
+          <button onClick={generate} className="btn-primary" style={{ fontSize: 14, padding: '10px 24px' }}>
+            Generate insights
+          </button>
+        </div>
+      )}
+
+      {/* Tabs + insights */}
+      {!loading && insights && (
+        <>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+            {TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'all 0.1s', background: tab === t ? 'var(--bg-overlay)' : 'var(--bg-elevated)', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)', border: `1px solid ${tab === t ? 'var(--border-default)' : 'var(--border-subtle)'}` }}>{t}</button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {list.length === 0
+              ? <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '24px 0', textAlign: 'center' }}>No {tab.toLowerCase()} insights</p>
+              : list.map(i => <InsightCard key={i.id} insight={i} />)
+            }
+          </div>
+        </>
+      )}
+
       <div style={{ height: 16 }} />
     </div>
   )
