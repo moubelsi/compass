@@ -2,6 +2,37 @@
 
 ---
 
+## 2026-06-23 — PWA (installable app)
+
+### Feature: Progressive Web App
+
+**Files changed**
+- `app/manifest.ts` (new)
+- `app/icon.tsx` (new — auto-generates 32×32 favicon PNG)
+- `app/apple-icon.tsx` (new — auto-generates 180×180 iOS PNG)
+- `public/icon.svg` (new — compass icon for Android/Chrome manifest)
+- `app/layout.tsx` (viewport export, PWA metadata, manifest link)
+
+**What changed**
+
+Added PWA support so the app can be installed directly from the browser on iOS and Android.
+
+- `app/manifest.ts`: `start_url: /dashboard`, `display: standalone`, references SVG + PNG icons, `theme_color: #1A1A19`
+- `app/icon.tsx`: generates favicon using `ImageResponse` — dark rounded square with white compass
+- `app/apple-icon.tsx`: generates `apple-touch-icon.png` (180×180) using `ImageResponse` — used by iOS Safari "Add to Home Screen"
+- `public/icon.svg`: static SVG used by Android/Chrome manifest (supported since Chrome 93)
+- `app/layout.tsx`: added `viewport` export (width, initialScale 1, theme-color media variants); added `appleWebApp: { capable: true }` metadata
+
+**How to install:**
+- **iOS**: Open in Safari → Share → Add to Home Screen
+- **Android**: Open in Chrome → menu (⋮) → Add to Home Screen / Install app
+- **Desktop Chrome**: Click the install icon in the address bar
+
+**New dependencies**
+None (`ImageResponse` is built into Next.js)
+
+---
+
 ## 2026-06-23 — Dark mode, trade detail fixes, new trade form fields
 
 ### Polish + fixes
