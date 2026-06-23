@@ -121,17 +121,17 @@ export default function DashboardPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '48px 56px 36px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-        <div style={{ maxWidth: 1500, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <div>
-            <p style={{ fontSize: 16, color: 'var(--text-muted)', marginBottom: 8 }}>{greeting}</p>
-            <h1 style={{ fontSize: 42, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: 14 }}>Your performance</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>{greeting}</p>
+            <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Dashboard</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
               {todayReturn !== 0 ? (
                 <>
                   {todayReturn > 0
-                    ? <TrendingUp size={18} style={{ color: 'var(--profit)' }} />
-                    : <TrendingDown size={18} style={{ color: 'var(--loss)' }} />}
+                    ? <TrendingUp size={15} style={{ color: 'var(--profit)' }} />
+                    : <TrendingDown size={15} style={{ color: 'var(--loss)' }} />}
                   <span style={{ fontWeight: 500, color: todayReturn >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
                     {todayReturn >= 0 ? '+' : ''}{todayReturn.toFixed(2)}% today
                   </span>
@@ -144,13 +144,13 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-          <Link href="/trades/new" className="btn-primary" style={{ fontSize: 16, padding: '14px 28px' }}>
+          <Link href="/trades/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
             + Log trade
           </Link>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1500, margin: '0 auto', padding: '40px 56px', display: 'flex', flexDirection: 'column', gap: 32 }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 48px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
         {/* Philosophy */}
         <PhilosophyBar />
@@ -250,7 +250,7 @@ export default function DashboardPage() {
                       <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{t.strategy || '—'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{new Date(t.trade_date || t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                       <span style={{ fontSize: 14, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
@@ -258,8 +258,8 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                      <span style={{ fontSize: 14, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                        {up ? '+' : ''}${Math.abs(Number(t.pnl)).toFixed(2)}
+                      <span style={{ fontSize: 14, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
+                        {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
                       </span>
                     </div>
                   </Link>

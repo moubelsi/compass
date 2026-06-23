@@ -2,6 +2,31 @@
 
 ---
 
+## 2026-06-23 — Design polish: mobile nav + consistency pass
+
+### Polish: full app design consistency
+
+**Files changed**
+- `components/layout/AppShell.tsx`
+- `app/globals.css`
+- `app/(app)/dashboard/page.tsx`
+- `app/(app)/coach/page.tsx`
+
+**What changed**
+
+**Mobile navigation** (AppShell): Added `MobileHeader` (fixed top bar with logo, 52px) and `MobileBottomNav` (fixed bottom tab bar, 64px) shown only on screens ≤768px. Added `desktop-sidebar` class to sidebar `<aside>` so CSS hides it on mobile. Updated `globals.css` to add `padding-bottom: 64px` on mobile `<main>` so content isn't hidden behind the tab bar.
+
+**Dashboard header normalised**: Reduced heading from `fontSize: 42` → `28`, padding from `48px 56px 36px` → `40px 48px 28px`, content gap/padding reduced, `maxWidth` from `1500` → `1400`. Log trade button reduced to standard size. All values now match Trades / Analytics / Settings pages.
+
+**Dashboard recent trades**: P&L column was always `var(--text-muted)` (grey). Now coloured `var(--profit)` / `var(--loss)`. Date now correctly uses `trade_date` with fallback to `created_at`.
+
+**Coach page header**: Added a proper full-width page header bar (matching all other pages) with title, BETA badge, subtitle, and Regenerate button. Content moved into a `maxWidth: 680` wrapper with consistent padding.
+
+**New dependencies**
+None
+
+---
+
 ## 2026-06-23 — AI Coach
 
 ### Feature: Real AI-generated trading insights

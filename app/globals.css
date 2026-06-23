@@ -241,5 +241,5 @@ body {
 
 @media (max-width: 768px) {
   .desktop-sidebar { display: none !important; }
-  main { padding-left: 0 !important; padding-top: 52px !important; }
+  main { padding-left: 0 !important; padding-top: 52px !important; padding-bottom: 64px !important; }
 }

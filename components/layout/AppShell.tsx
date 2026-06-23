@@ -9,9 +9,11 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trades',    label: 'Trades',    icon: BookOpen },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },
-  { href: '/coach',     label: 'AI Coach',  icon: Sparkles, ai: true },
+  { href: '/coach',     label: 'Coach',     icon: Sparkles, ai: true },
   { href: '/settings',  label: 'Settings',  icon: Settings },
 ]
+
+const MOBILE_NAV = NAV.filter(n => n.href !== '/settings')
 
 function CompassIcon({ size = 14, color = 'var(--bg-surface)' }: { size?: number; color?: string }) {
   return (
@@ -31,7 +33,7 @@ function Sidebar() {
   }
 
   return (
-    <aside style={{
+    <aside className="desktop-sidebar" style={{
       width: '240px',
       background: 'var(--bg-surface)',
       borderRight: '1px solid var(--border-subtle)',
@@ -91,7 +93,7 @@ function Sidebar() {
               textDecoration: 'none', transition: 'all 0.1s',
             }}>
               <Icon size={16} strokeWidth={active ? 2 : 1.75} style={{ color: ai && !active ? 'var(--ai-accent)' : 'inherit', flexShrink: 0 }} />
-              <span style={{ flex: 1 }}>{label}</span>
+              <span style={{ flex: 1 }}>{label === 'Coach' ? 'AI Coach' : label}</span>
               {ai && <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>AI</span>}
             </Link>
           )
@@ -115,10 +117,62 @@ function Sidebar() {
   )
 }
 
+function MobileHeader() {
+  return (
+    <div className="mobile-header" style={{
+      position: 'fixed', top: 0, left: 0, right: 0,
+      height: 52, background: 'var(--bg-surface)',
+      borderBottom: '1px solid var(--border-subtle)',
+      display: 'flex', alignItems: 'center',
+      padding: '0 20px', zIndex: 40,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CompassIcon size={12} color="var(--bg-surface)" />
+        </div>
+        <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Compass</span>
+      </div>
+    </div>
+  )
+}
+
+function MobileBottomNav() {
+  const path = usePathname()
+  return (
+    <nav className="mobile-nav" style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0,
+      height: 64, background: 'var(--bg-surface)',
+      borderTop: '1px solid var(--border-subtle)',
+      display: 'flex', zIndex: 40, padding: '0 4px',
+    }}>
+      {MOBILE_NAV.map(({ href, label, icon: Icon, ai }) => {
+        const active = path === href || path.startsWith(href + '/')
+        return (
+          <Link key={href} href={href} style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 3,
+            textDecoration: 'none', padding: '8px 4px',
+            color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+          }}>
+            <Icon
+              size={21}
+              strokeWidth={active ? 2 : 1.75}
+              style={{ color: ai && !active ? 'var(--ai-accent)' : undefined }}
+            />
+            <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{label}</span>
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       <Sidebar />
+      <MobileHeader />
+      <MobileBottomNav />
       <main style={{ paddingLeft: '240px' }}>
         {children}
       </main>

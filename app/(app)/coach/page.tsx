@@ -89,28 +89,32 @@ export default function CoachPage() {
     : []
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '24px 16px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sparkles size={16} style={{ color: 'var(--ai-accent)' }} />
-            <h1 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>AI Coach</h1>
-            <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>BETA</span>
+    <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
+      {/* Page header */}
+      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <Sparkles size={15} style={{ color: 'var(--ai-accent)' }} />
+              <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>AI Coach</h1>
+              <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>BETA</span>
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+              {insights ? `${insights.length} insights from your last ${tradeCount} trades` : 'Personalised coaching from your actual trade data'}
+            </p>
           </div>
           {insights && !loading && (
             <button
               onClick={generate}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '8px 14px', cursor: 'pointer' }}
             >
-              <RefreshCw size={11} />Regenerate
+              <RefreshCw size={13} />Regenerate
             </button>
           )}
         </div>
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-          {insights ? `${insights.length} insights from your last ${tradeCount} trades` : 'Personalised coaching from your actual trade data'}
-        </p>
       </div>
+
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 48px' }}>
 
       {/* Error */}
       {error && (
@@ -160,6 +164,7 @@ export default function CoachPage() {
       )}
 
       <div style={{ height: 16 }} />
+      </div>
     </div>
   )
 }
