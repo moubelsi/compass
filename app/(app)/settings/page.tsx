@@ -1,11 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 export default function SettingsPage() {
   const [email, setEmail] = useState('')
   const [loadingUser, setLoadingUser] = useState(true)
+  const [trades, setTrades] = useState<any[]>([])
+  const [exporting, setExporting] = useState(false)
+  const [exportDone, setExportDone] = useState(false)
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -18,11 +22,43 @@ export default function SettingsPage() {
   const [deleteSuccess, setDeleteSuccess] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    async function load() {
+      const [{ data: { user } }, { data }] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('trades').select('*').order('trade_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
+      ])
       setEmail(user?.email ?? '')
+      setTrades(data || [])
       setLoadingUser(false)
-    })
+    }
+    load()
   }, [])
+
+  function exportCSV() {
+    setExporting(true)
+    const headers = ['Date','Symbol','Direction','Strategy','Entry','Exit','Stop Loss','Take Profit','P&L','Return %','R:R','Trade Type','Confidence','Followed Plan','Notes','Tags']
+    const rows = trades.map(t => [
+      t.trade_date || t.created_at?.split('T')[0] || '',
+      t.symbol || '', t.direction || '', t.strategy || '',
+      t.entry_price ?? '', t.exit_price ?? '', t.stop_loss ?? '', t.take_profit ?? '',
+      t.pnl ?? '', t.return_pct ?? '', t.rr ?? '',
+      t.trade_type || '', t.confidence ?? '',
+      t.followed_plan != null ? (t.followed_plan ? 'Yes' : 'No') : '',
+      `"${(t.notes || '').replace(/"/g, '""')}"`,
+      `"${(t.tags || []).join(', ')}"`,
+    ])
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `compass-trades-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    setExporting(false)
+    setExportDone(true)
+    setTimeout(() => setExportDone(false), 3000)
+  }
 
   async function handleChangePassword() {
     setPwError('')
@@ -72,16 +108,44 @@ export default function SettingsPage() {
         {/* Account */}
         <div className="card" style={{ padding: 28 }}>
           <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 20 }}>Account</p>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6 }}>Email</label>
-            <input
-              className="input"
-              type="email"
-              value={loadingUser ? '' : email}
-              disabled
-              style={{ opacity: 0.6, cursor: 'default' }}
-            />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6 }}>Email</label>
+              <input className="input" type="email" value={loadingUser ? '' : email} disabled style={{ opacity: 0.6, cursor: 'default' }} />
+            </div>
+            {trades.length > 0 && (() => {
+              const wins = trades.filter(t => Number(t.pnl) > 0).length
+              const totalPnl = trades.reduce((s, t) => s + Number(t.pnl || 0), 0)
+              const winRate = ((wins / trades.length) * 100).toFixed(1)
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, paddingTop: 4 }}>
+                  {[
+                    { label: 'Total trades', value: String(trades.length), color: undefined },
+                    { label: 'Win rate', value: `${winRate}%`, color: Number(winRate) >= 50 ? 'var(--profit)' : 'var(--loss)' },
+                    { label: 'All-time P&L', value: `${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}`, color: totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>{label}</p>
+                      <p style={{ fontSize: 18, fontWeight: 600, color: color ?? 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
+        </div>
+
+        {/* Export */}
+        <div className="card" style={{ padding: 28 }}>
+          <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 8 }}>Export data</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>
+            Download all your trades as a CSV file — includes every field (date, symbol, P&L, notes, tags…). Compatible with Excel and Google Sheets.
+          </p>
+          <button onClick={exportCSV} disabled={exporting || trades.length === 0} className="btn-primary" style={{ fontSize: 14 }}>
+            <Download size={14} />
+            {exportDone ? '✓ Downloaded!' : exporting ? 'Preparing…' : `Export ${trades.length} trade${trades.length !== 1 ? 's' : ''} as CSV`}
+          </button>
+          {trades.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>No trades to export yet.</p>}
         </div>
 
         {/* Change password */}

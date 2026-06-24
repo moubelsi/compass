@@ -2,6 +2,94 @@
 
 ---
 
+## 2026-06-24 — Analytics, Dashboard, Settings
+
+### Feature: Calendar heatmap (Analytics)
+
+**Files changed**
+- `components/charts/CalendarHeatmap.tsx` (new)
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+- New `CalendarHeatmap` component: 26-week grid (Mon–Sun columns), colour-coded by daily P&L intensity (green = profit, red = loss). Hover tooltip shows date, P&L, and trade count
+- Added "Trading activity" section to analytics page between equity curve and strategy charts
+- Fixed analytics select query to include `direction` column (was missing, causing Long vs Short table to show empty)
+
+---
+
+### Feature: Drawdown + Streak stats (Analytics)
+
+**Files changed**
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+- New stat row: Max drawdown (peak-to-trough %), Current streak (N W / N L), Best win streak, Total trades
+- Current streak and best win streak computed from trade history
+
+---
+
+### Feature: Streak on Dashboard
+
+**Files changed**
+- `app/(app)/dashboard\page.tsx`
+
+**What changed**
+- Current win/loss streak shown as sub-text on the Discipline Score KPI card
+
+---
+
+### Feature: Export CSV + account stats (Settings)
+
+**Files changed**
+- `app/(app)/settings/page.tsx`
+
+**What changed**
+- Added account stats mini-grid: Total trades, Win rate, All-time P&L
+- New "Export data" card: downloads all trades as UTF-8 CSV (with BOM for Excel compatibility), includes all columns — date, symbol, direction, strategy, entry/exit, P&L, return %, R:R, trade type, confidence, followed plan, notes, tags
+
+**New dependencies:** none
+
+---
+
+## 2026-06-24 — Tags + Favourites on trades
+
+### Feature: Tags on trades
+
+**Files changed**
+- `components/ui/TagInput.tsx` (new)
+- `app/(app)/trades/page.tsx`
+- `app/(app)/trades/[id]/page.tsx`
+- `app/(app)/trades/[id]/edit/page.tsx`
+- `app/(app)/trades/new/page.tsx`
+
+**What changed**
+
+Added a tags system and favourites toggle to the trades journal.
+
+**Tags**
+- New `TagInput` component: chip display of applied tags, text input (Enter/comma to add, Backspace to remove last), preset suggestions (A+ Setup, FOMO, Revenge, Breakout, etc.)
+- Tags added to new trade form and edit trade form (Analysis card, below Notes)
+- Tags displayed as small chips on each row in the trades list (below the symbol/direction badges)
+- Tags shown in Setup details on the trade detail page
+- Tag filter chips appear at the top of the trades list — click any tag to filter to only that tag
+
+**Favourites**
+- Star icon column added as the first column in the trades list; click to toggle (optimistic update)
+- "Starred" filter button added to the filter row — shows only starred trades
+- Star button in the trade detail page nav bar
+- Star button in the edit trade page nav bar
+- `is_favourite` persisted in the database and included in all save/update calls
+
+**SQL required (run in Supabase before using these features)**
+```sql
+alter table trades add column if not exists tags text[] default '{}';
+alter table trades add column if not exists is_favourite boolean default false;
+```
+
+**New dependencies:** none
+
+---
+
 ## 2026-06-23 — PWA (installable app)
 
 ### Feature: Progressive Web App

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Check, ChevronDown, ImagePlus, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { TagInput } from '@/components/ui/TagInput'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
 
@@ -23,6 +24,7 @@ interface Form {
   trade_type: 'planned'|'impulsive'|''
   confidence: number
   notes: string; date: string; rr: string
+  tags: string[]
 }
 
 function Label({ children, req }: { children: React.ReactNode; req?: boolean }) {
@@ -57,7 +59,8 @@ export default function NewTradePage() {
     entry: '', exit: '', sl: '', tp: '', size: '',
     strategy: '', score: 0, followed_plan: true,
     trade_type: '', confidence: 0,
-    notes: '', date: new Date().toISOString().split('T')[0], rr: ''
+    notes: '', date: new Date().toISOString().split('T')[0], rr: '',
+    tags: [],
   })
 
   const upd = (k: keyof Form, v: string | number | boolean) => setF(p => ({ ...p, [k]: v }))
@@ -117,7 +120,7 @@ export default function NewTradePage() {
 
       const rrValue = f.rr ? parseFloat(f.rr) : autoRR ? parseFloat(autoRR) : null
 
-      const { error: insertError } = await supabase.from('trades').insert({
+      const insertPayload: Record<string, any> = {
         user_id: user?.id,
         symbol: f.symbol.toUpperCase(),
         direction: f.direction,
@@ -132,12 +135,18 @@ export default function NewTradePage() {
         trade_type: f.trade_type || null,
         confidence: f.confidence || null,
         notes: f.notes || null,
+        tags: f.tags,
         return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : null,
         rr: rrValue,
         trade_date: f.date,
         screenshot_url,
-      })
-
+      }
+      let { error: insertError } = await supabase.from('trades').insert(insertPayload)
+      if (insertError?.message?.includes('schema cache')) {
+        const { tags, ...legacyPayload } = insertPayload
+        const { error: retryError } = await supabase.from('trades').insert(legacyPayload)
+        insertError = retryError ?? null
+      }
       if (insertError) throw insertError
       router.push('/trades')
     } catch (err: any) {
@@ -295,6 +304,11 @@ export default function NewTradePage() {
               <div>
                 <Label>Notes</Label>
                 <textarea className="input" rows={5} placeholder="What made you take this trade? What went well? What could be improved?" value={f.notes} onChange={e => upd('notes', e.target.value)} style={{ lineHeight: 1.6, resize: 'none', fontSize: 14 }} />
+              </div>
+
+              <div>
+                <Label>Tags</Label>
+                <TagInput value={f.tags} onChange={tags => setF(p => ({ ...p, tags }))} />
               </div>
             </div>
 

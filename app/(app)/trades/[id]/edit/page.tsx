@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ChevronDown, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
+import { TagInput } from '@/components/ui/TagInput'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
 
@@ -71,7 +72,9 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
     strategy: '', score: 0, followed_plan: true,
     trade_type: '' as 'planned'|'impulsive'|'',
     confidence: 0,
-    notes: '', date: '', rr: ''
+    notes: '', date: '', rr: '',
+    tags: [] as string[],
+    is_favourite: false,
   })
 
   useEffect(() => {
@@ -95,6 +98,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           notes: data.notes || '',
           date: data.trade_date || data.created_at?.split('T')[0] || '',
           rr: data.rr?.toString() || '',
+          tags: data.tags || [],
+          is_favourite: data.is_favourite || false,
         })
         const url = data.screenshot_url
         if (url && url !== 'EMPTY') setExistingScreenshot(url)
@@ -148,7 +153,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
       }
 
       const rrValue = f.rr ? parseFloat(f.rr) : autoRR ? parseFloat(autoRR) : null
-      const { error: updateError } = await supabase.from('trades').update({
+      const basePayload: Record<string, any> = {
         symbol: f.symbol.toUpperCase(),
         direction: f.direction,
         entry_price: f.entry ? parseFloat(f.entry) : null,
@@ -162,11 +167,20 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         trade_type: f.trade_type || null,
         confidence: f.confidence || null,
         notes: f.notes || null,
+        tags: f.tags,
+        is_favourite: f.is_favourite,
         screenshot_url: screenshotUrl,
         return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : null,
         rr: rrValue,
         trade_date: f.date || null,
-      }).eq('id', id)
+      }
+      let { error: updateError } = await supabase.from('trades').update(basePayload).eq('id', id)
+      if (updateError?.message?.includes('schema cache')) {
+        // columns not migrated yet — retry without new fields
+        const { tags, is_favourite, ...legacyPayload } = basePayload
+        const { error: retryError } = await supabase.from('trades').update(legacyPayload).eq('id', id)
+        updateError = retryError ?? null
+      }
       if (updateError) throw updateError
       router.push(`/trades/${id}`)
     } catch (err: any) {
@@ -179,14 +193,19 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
-      <div style={{ position: 'fixed', top: 0, left: 240, right: 0, zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div className="page-fixed-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px' }}>
         <Link href={`/trades/${id}`} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>
           <ArrowLeft size={15} />Cancel
         </Link>
         <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Edit trade</span>
-        <button type="button" onClick={handleSave} disabled={saving} className="btn-primary" style={{ fontSize: 14 }}>
-          <Check size={14} strokeWidth={2.5} />{saving ? 'Saving…' : 'Save changes'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button type="button" onClick={() => setF(p => ({ ...p, is_favourite: !p.is_favourite }))} title={f.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: f.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${f.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer' }}>
+            <Star size={15} fill={f.is_favourite ? '#B45309' : 'none'} style={{ color: f.is_favourite ? '#B45309' : 'var(--text-muted)' }} />
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving} className="btn-primary" style={{ fontSize: 14 }}>
+            <Check size={14} strokeWidth={2.5} />{saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
@@ -328,6 +347,11 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
               <div>
                 <Label>Notes</Label>
                 <textarea className="input" rows={5} value={f.notes} onChange={e => upd('notes', e.target.value)} style={{ lineHeight: 1.6, resize: 'none', fontSize: 14 }} />
+              </div>
+
+              <div>
+                <Label>Tags</Label>
+                <TagInput value={f.tags} onChange={tags => setF(p => ({ ...p, tags }))} />
               </div>
 
               <div>

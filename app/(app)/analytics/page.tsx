@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { EquityCurve } from '@/components/charts/EquityCurve'
+import { CalendarHeatmap } from '@/components/charts/CalendarHeatmap'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
@@ -47,24 +48,37 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
+type Period = '1W' | '1M' | '3M' | '6M' | '1Y' | 'All'
+const PERIODS: Period[] = ['1W', '1M', '3M', '6M', '1Y', 'All']
+
+function filterByPeriod(trades: any[], p: Period) {
+  if (p === 'All') return trades
+  const days = p === '1W' ? 7 : p === '1M' ? 30 : p === '3M' ? 90 : p === '6M' ? 180 : 365
+  const cutoff = new Date(Date.now() - days * 86400000)
+  return trades.filter(t => new Date(t.trade_date || t.created_at) >= cutoff)
+}
+
 export default function AnalyticsPage() {
-  const [trades, setTrades] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [allTrades, setAllTrades] = useState<any[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [period, setPeriod]       = useState<Period>('All')
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence')
+        .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
-      setTrades(data || [])
+      setAllTrades(data || [])
       setLoading(false)
     }
     load()
   }, [])
 
   if (loading) return <div style={{ padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>Loading...</div>
+
+  const trades = filterByPeriod(allTrades, period)
 
   const totalTrades = trades.length
   const wins = trades.filter(t => Number(t.pnl) > 0)
@@ -82,13 +96,47 @@ export default function AnalyticsPage() {
 
   // Equity curve data
   const equityData = trades.reduce((acc: any[], trade, i) => {
-    const prev = acc[i - 1]?.value || 0
+    const prev = acc[i - 1] || { value: 0, pnl: 0 }
     acc.push({
       date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: prev + Number(trade.return_pct || 0)
+      value: prev.value + Number(trade.return_pct || 0),
+      pnl: prev.pnl + Number(trade.pnl || 0),
     })
     return acc
   }, [])
+
+  // Max drawdown (from equity curve)
+  let peak = 0, maxDrawdown = 0
+  equityData.forEach(d => {
+    if (d.value > peak) peak = d.value
+    const dd = peak - d.value
+    if (dd > maxDrawdown) maxDrawdown = dd
+  })
+
+  // Current streak + best win streak (trades are ascending = oldest first)
+  let currentStreak = 0, streakIsWin = false
+  for (let i = trades.length - 1; i >= 0; i--) {
+    const w = Number(trades[i].pnl) > 0
+    if (currentStreak === 0) { streakIsWin = w; currentStreak = 1 }
+    else if (w === streakIsWin) currentStreak++
+    else break
+  }
+  let bestWinStreak = 0, run = 0
+  trades.forEach(t => {
+    if (Number(t.pnl) > 0) { run++; if (run > bestWinStreak) bestWinStreak = run }
+    else run = 0
+  })
+
+  // Calendar heatmap data
+  const calMap: Record<string, { pnl: number; trades: number }> = {}
+  trades.forEach(t => {
+    const date = t.trade_date || t.created_at?.split('T')[0]
+    if (!date) return
+    if (!calMap[date]) calMap[date] = { pnl: 0, trades: 0 }
+    calMap[date].pnl += Number(t.pnl || 0)
+    calMap[date].trades++
+  })
+  const calendarData = Object.entries(calMap).map(([date, v]) => ({ date, ...v }))
 
   // P&L by strategy
   const byStrategy = trades.reduce((acc: any, t) => {
@@ -181,9 +229,21 @@ export default function AnalyticsPage() {
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Header */}
       <div style={{ padding: '40px 40px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Analytics</h1>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{totalTrades} trades analysed</p>
+        <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Analytics</h1>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+              {totalTrades} trade{totalTrades !== 1 ? 's' : ''}
+              {period !== 'All' && <span style={{ color: 'var(--text-disabled)' }}> · {allTrades.length} total</span>}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {PERIODS.map(p => (
+              <button key={p} onClick={() => setPeriod(p)} style={{ padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: 'pointer', background: period === p ? 'var(--bg-overlay)' : 'var(--bg-elevated)', color: period === p ? 'var(--text-primary)' : 'var(--text-muted)', border: `1px solid ${period === p ? 'var(--border-default)' : 'var(--border-subtle)'}`, transition: 'all 0.1s' }}>
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -207,6 +267,18 @@ export default function AnalyticsPage() {
           <StatCard label="Worst trade" value={worstTrade?.symbol ? `-$${Math.abs(Number(worstTrade.pnl)).toFixed(2)}` : '—'} sub={worstTrade?.symbol ?? ''} color="var(--loss)" />
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+          <StatCard label="Max drawdown" value={maxDrawdown > 0 ? `-${maxDrawdown.toFixed(2)}%` : '—'} sub="Peak-to-trough" color={maxDrawdown > 0 ? 'var(--loss)' : undefined} />
+          <StatCard
+            label="Current streak"
+            value={totalTrades === 0 ? '—' : `${currentStreak} ${streakIsWin ? 'W' : 'L'}`}
+            sub={currentStreak > 1 ? `${currentStreak} in a row` : 'in a row'}
+            color={totalTrades === 0 ? undefined : streakIsWin ? 'var(--profit)' : 'var(--loss)'}
+          />
+          <StatCard label="Best win streak" value={bestWinStreak > 0 ? `${bestWinStreak} W` : '—'} sub="Consecutive wins" color={bestWinStreak > 0 ? 'var(--profit)' : undefined} />
+          <StatCard label="Total trades" value={String(totalTrades)} sub={`${wins.length}W · ${losses.length}L`} />
+        </div>
+
         {/* Equity curve */}
         <div>
           <SectionTitle>Equity curve</SectionTitle>
@@ -217,6 +289,16 @@ export default function AnalyticsPage() {
             }
           </div>
         </div>
+
+        {/* Calendar heatmap */}
+        {calendarData.length > 0 && (
+          <div>
+            <SectionTitle>Trading activity</SectionTitle>
+            <div className="card" style={{ padding: '20px 24px 16px' }}>
+              <CalendarHeatmap data={calendarData} />
+            </div>
+          </div>
+        )}
 
         {/* Charts grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>

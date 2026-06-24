@@ -50,6 +50,12 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
     router.push('/trades')
   }
 
+  async function toggleFavourite() {
+    const next = !trade.is_favourite
+    setTrade((prev: any) => ({ ...prev, is_favourite: next }))
+    await supabase.from('trades').update({ is_favourite: next }).eq('id', id)
+  }
+
   if (loading) return <div style={{ padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>Loading...</div>
   if (!trade) return <div style={{ padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>Trade not found</div>
 
@@ -79,6 +85,9 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
           <ArrowLeft size={15} />Trades
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={toggleFavourite} title={trade.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: trade.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${trade.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer' }}>
+            <Star size={15} fill={trade.is_favourite ? '#B45309' : 'none'} style={{ color: trade.is_favourite ? '#B45309' : 'var(--text-muted)' }} />
+          </button>
           <Link href={`/trades/${id}/edit`} className="btn-secondary" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
             <Edit3 size={14} />Edit trade
           </Link>
@@ -168,6 +177,18 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12 }}>
                   <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Take profit</span>
                   <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--profit)', fontVariantNumeric: 'tabular-nums' }}>{trade.take_profit}</span>
+                </div>
+              )}
+              {trade.tags && trade.tags.length > 0 && (
+                <div style={{ paddingTop: 14, borderTop: '1px solid var(--border-subtle)', marginTop: 4 }}>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 500, letterSpacing: '0.04em' }}>TAGS</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {trade.tags.map((tag: string) => (
+                      <span key={tag} style={{ fontSize: 12, fontWeight: 500, padding: '3px 10px', borderRadius: 20, background: 'var(--bg-elevated)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

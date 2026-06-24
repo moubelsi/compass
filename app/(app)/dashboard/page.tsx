@@ -45,9 +45,13 @@ function PhilosophyBar() {
   )
 }
 
+type CurvePeriod = '1M' | '3M' | '6M' | 'All'
+const CURVE_PERIODS: CurvePeriod[] = ['1M', '3M', '6M', 'All']
+
 export default function DashboardPage() {
-  const [trades, setTrades] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [trades, setTrades]           = useState<any[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [curvePeriod, setCurvePeriod] = useState<CurvePeriod>('All')
 
   useEffect(() => {
     async function load() {
@@ -71,11 +75,18 @@ export default function DashboardPage() {
   const grossLoss = Math.abs(losses.reduce((s, t) => s + Number(t.pnl), 0))
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0
 
-  const equityData = [...trades].reverse().reduce((acc: any[], trade, i) => {
-    const prev = acc[i - 1]?.value || 0
+  const curveTradesAll = [...trades].reverse()
+  const curveTrades = curvePeriod === 'All' ? curveTradesAll : (() => {
+    const days = curvePeriod === '1M' ? 30 : curvePeriod === '3M' ? 90 : 180
+    const cutoff = new Date(Date.now() - days * 86400000)
+    return curveTradesAll.filter(t => new Date(t.trade_date || t.created_at) >= cutoff)
+  })()
+  const equityData = curveTrades.reduce((acc: any[], trade, i) => {
+    const prev = acc[i - 1] || { value: 0, pnl: 0 }
     acc.push({
       date: new Date(trade.trade_date || trade.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: prev + Number(trade.return_pct || 0)
+      value: prev.value + Number(trade.return_pct || 0),
+      pnl: prev.pnl + Number(trade.pnl || 0),
     })
     return acc
   }, [])
@@ -110,6 +121,15 @@ export default function DashboardPage() {
   const avgConf        = confTrades.length > 0 ? confTrades.reduce((s, t) => s + Number(t.confidence), 0) / confTrades.length : 0
   const journalledPct  = totalTrades > 0 ? trades.filter(t => (t.notes && t.notes !== 'EMPTY') || (t.screenshot_url && t.screenshot_url !== 'EMPTY')).length / totalTrades : 0
   const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalledPct * 10) : null
+
+  // Streak (trades are descending = newest first)
+  let currentStreak = 0, streakIsWin = false
+  for (let i = 0; i < trades.length; i++) {
+    const w = Number(trades[i].pnl) > 0
+    if (currentStreak === 0) { streakIsWin = w; currentStreak = 1 }
+    else if (w === streakIsWin) currentStreak++
+    else break
+  }
   const disciplineColor = disciplineScore === null ? undefined : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
   const disciplineSub   = disciplineScore === null ? 'Log trades to unlock' : `${totalTrades} trade${totalTrades !== 1 ? 's' : ''} analysed`
 
@@ -177,7 +197,7 @@ export default function DashboardPage() {
           <KPICard
             label="Discipline score"
             value={disciplineScore !== null ? String(disciplineScore) : '—'}
-            sub={disciplineSub}
+            sub={currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'} streak` : disciplineSub}
             color={disciplineColor}
           />
         </div>
@@ -185,7 +205,16 @@ export default function DashboardPage() {
         {/* Equity curve */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Equity curve</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Equity curve</p>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {CURVE_PERIODS.map(p => (
+                  <button key={p} onClick={() => setCurvePeriod(p)} style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500, cursor: 'pointer', background: curvePeriod === p ? 'var(--bg-overlay)' : 'transparent', color: curvePeriod === p ? 'var(--text-primary)' : 'var(--text-muted)', border: `1px solid ${curvePeriod === p ? 'var(--border-default)' : 'transparent'}`, transition: 'all 0.1s' }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
             <Link href="/analytics" style={{ fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
               Full analytics <ChevronRight size={14} />
             </Link>

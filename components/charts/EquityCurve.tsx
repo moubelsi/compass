@@ -5,17 +5,26 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface DataPoint {
   date: string
   value: number
+  pnl?: number
 }
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null
-  const v = payload[0]?.value as number
+  const v   = payload[0]?.value as number
+  const pnl = payload[0]?.payload?.pnl as number | undefined
+  const up  = v >= 0
+  const color = up ? 'var(--profit)' : 'var(--loss)'
   return (
-    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px' }}>
-      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>{label}</p>
-      <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-        {v >= 0 ? '+' : ''}{v.toFixed(2)}%
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 8, padding: '10px 14px', minWidth: 110 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{label}</p>
+      <p style={{ fontSize: 22, fontWeight: 600, color, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>
+        {up ? '+' : ''}{v.toFixed(2)}%
       </p>
+      {pnl !== undefined && (
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
+          {pnl >= 0 ? '+' : ''}${Math.abs(pnl).toFixed(2)}
+        </p>
+      )}
     </div>
   )
 }
