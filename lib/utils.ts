@@ -1,10 +1,3 @@
-import { type ClassValue, clsx } from 'clsx'
-import { twMerge } from 'tailwind-merge'
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
 export function formatCurrency(v: number, sign = false) {
   const f = `$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   return sign ? (v >= 0 ? `+${f}` : `-${f}`) : f

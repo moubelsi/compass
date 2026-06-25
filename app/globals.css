@@ -248,3 +248,19 @@ body {
   .page-fixed-bar  { left: 0 !important; top: var(--header-height) !important; }
   main { padding-left: 0 !important; padding-top: 52px !important; padding-bottom: 64px !important; }
 }
+
+/* ── Journal surface tokens ───────────────────────────────── */
+:root {
+  --journal-rose:       #B5706A;
+  --journal-rose-dim:   rgba(181,112,106,0.09);
+  --journal-ivory:      #FAF7F4;
+  --journal-ivory-dark: #F5F0EB;
+  --journal-ink:        #3D2F2A;
+}
+.dark {
+  --journal-rose:       #C4837A;
+  --journal-rose-dim:   rgba(196,131,122,0.12);
+  --journal-ivory:      #1D1916;
+  --journal-ivory-dark: #231F1B;
+  --journal-ink:        #E8DDD8;
+}

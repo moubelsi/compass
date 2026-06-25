@@ -17,6 +17,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Compass',
   description: 'Your trading performance operating system',
+  icons: { icon: '/logo.png', apple: '/logo.png' },
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,

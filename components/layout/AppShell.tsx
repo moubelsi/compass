@@ -3,27 +3,22 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, BookOpen, TrendingUp, Sparkles, Settings, Plus, LogOut, Moon, Sun } from 'lucide-react'
+import { LayoutDashboard, BookOpen, TrendingUp, Sparkles, Settings, Plus, LogOut, Moon, Sun, BookMarked, PenLine, Calculator } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trades',    label: 'Trades',    icon: BookOpen },
+  { href: '/playbook',  label: 'Playbook',  icon: BookMarked },
+  { href: '/journal',   label: 'Journal',   icon: PenLine },
   { href: '/analytics', label: 'Analytics', icon: TrendingUp },
+  { href: '/tools',     label: 'Tools',     icon: Calculator },
   { href: '/coach',     label: 'Coach',     icon: Sparkles, ai: true },
   { href: '/settings',  label: 'Settings',  icon: Settings },
 ]
 
-const MOBILE_NAV = NAV.filter(n => n.href !== '/settings')
+const MOBILE_NAV = NAV.filter(n => ['/dashboard', '/trades', '/playbook', '/journal', '/analytics'].includes(n.href))
 
-function CompassIcon({ size = 14, color = 'var(--bg-surface)' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-    </svg>
-  )
-}
 
 function useDarkMode() {
   const [dark, setDark] = useState(false)
@@ -75,9 +70,7 @@ function Sidebar({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => vo
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <CompassIcon size={14} color="var(--bg-surface)" />
-          </div>
+          <img src="/logo.png" alt="Compass" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, objectFit: 'cover' }} />
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Compass</span>
         </div>
         <div style={{ display: 'flex', gap: 2 }}>
@@ -138,9 +131,7 @@ function MobileHeader({ dark, onToggleDark }: { dark: boolean; onToggleDark: () 
       padding: '0 16px', zIndex: 40,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <CompassIcon size={12} color="var(--bg-surface)" />
-        </div>
+        <img src="/logo.png" alt="Compass" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
         <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>Compass</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

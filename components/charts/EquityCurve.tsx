@@ -39,7 +39,7 @@ export function EquityCurve({ data }: { data: DataPoint[] }) {
   const color = isUp ? 'var(--profit)' : 'var(--loss)'
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 4, right: 0, bottom: -8, left: -20 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 8, bottom: -8, left: 8 }}>
         <defs>
           <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%"  stopColor={isUp ? '#3D9970' : '#C0392B'} stopOpacity={0.12} />
@@ -48,7 +48,7 @@ export function EquityCurve({ data }: { data: DataPoint[] }) {
         </defs>
         <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" horizontal vertical={false} />
         <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" tickMargin={8} />
-        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={formatAxis} width={44} domain={['auto', 'auto']} />
+        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={formatAxis} width={58} domain={['auto', 'auto']} />
         <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '3 3' }} />
         <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} fill="url(#grad)" dot={false} activeDot={{ r: 3.5, fill: color, stroke: 'var(--bg-surface)', strokeWidth: 2 }} />
       </AreaChart>

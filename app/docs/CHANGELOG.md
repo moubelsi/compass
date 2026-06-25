@@ -2,6 +2,131 @@
 
 ---
 
+## 2026-06-24 — Playbook, Journal, Tools, Hour analytics, Open trades, Weekly goal
+
+### Feature: Playbook
+
+**Files changed**
+- `app/(app)/playbook/page.tsx` (new)
+- `app/(app)/playbook/new/page.tsx` (new)
+- `app/(app)/playbook/[id]/page.tsx` (new)
+- `app/(app)/playbook/[id]/edit/page.tsx` (new)
+
+**What changed**
+- Full CRUD playbook: list, create, view, edit, delete setups
+- Each setup has name, description, dynamic rules list, tags (TagInput), optional screenshot
+- Detail page has interactive pre-trade checklist (local state, not persisted) with "All clear" badge when all rules checked
+- Screenshot can be uploaded to Supabase storage, replaced, or removed on edit
+
+**SQL required**
+```sql
+create table if not exists setups (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  name text not null,
+  description text,
+  rules text[] default '{}',
+  tags text[] default '{}',
+  screenshot_url text,
+  created_at timestamptz default now()
+);
+alter table setups enable row level security;
+create policy "Users manage own setups" on setups
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+---
+
+### Feature: Daily Journal
+
+**Files changed**
+- `app/(app)/journal/page.tsx` (new)
+
+**What changed**
+- Date navigator (← →) to browse any past day, capped at today
+- Mood selector: 5 emoji buttons (Rough → On fire), deselectable
+- Free-text notes textarea, auto-saves via upsert on `journal_entries` table
+- Shows trades summary for selected day (count, P&L, symbols) pulled from trades table
+- Past entries list below (last 60, shows 2-line preview + mood emoji)
+
+**SQL required**
+```sql
+create table if not exists journal_entries (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  entry_date date not null,
+  content text default '',
+  mood integer check (mood between 1 and 5),
+  created_at timestamptz default now(),
+  unique(user_id, entry_date)
+);
+alter table journal_entries enable row level security;
+create policy "Users manage own journal" on journal_entries
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+```
+
+---
+
+### Feature: Tools — Position size calculator
+
+**Files changed**
+- `app/(app)/tools/page.tsx` (new)
+
+**What changed**
+- Asset type selector: Forex, Indices, Gold, Crypto (each with correct multiplier)
+- Inputs: account size, risk % (range slider 0.1–5%), entry price, stop loss
+- Real-time calculation: risk amount, distance (points), lot/contract size
+- Plain-language summary sentence when result is available
+
+---
+
+### Feature: Hour-of-day analytics
+
+**Files changed**
+- `app/(app)/analytics/page.tsx`
+
+**What changed**
+- Computes P&L grouped by hour (from `created_at` timestamp)
+- Full-width bar chart at bottom of charts grid, colored green/red per hour
+
+---
+
+### Feature: Open positions on dashboard
+
+**Files changed**
+- `app/(app)/dashboard/page.tsx`
+
+**What changed**
+- Fetches trades where `exit_price IS NULL` as open positions
+- Shows open positions table: symbol, direction, entry price, date opened
+- Closed trades query now filters `exit_price IS NOT NULL` so open trades don't skew equity curve / stats
+
+---
+
+### Feature: Weekly P&L goal on dashboard
+
+**Files changed**
+- `app/(app)/dashboard/page.tsx`
+
+**What changed**
+- Weekly goal stored in `localStorage` (no DB change)
+- Inline edit: click "Set goal" / "Edit goal" → number input → save
+- Progress bar shows week-to-date P&L vs goal, colored accent until reached then profit-green
+- Sits alongside open positions in a 2-column row
+
+---
+
+### Navigation update
+
+**Files changed**
+- `components/layout/AppShell.tsx`
+
+**What changed**
+- Added Playbook (`BookMarked`), Journal (`PenLine`), Tools (`Calculator`) to desktop sidebar
+- Mobile bottom nav updated to show: Dashboard, Trades, Playbook, Journal, Analytics
+
+---
+
 ## 2026-06-24 — Analytics, Dashboard, Settings
 
 ### Feature: Calendar heatmap (Analytics)
