@@ -219,6 +219,7 @@ function KnowledgeEditor({ page, onClose, onSaved }: { page: typeof KNOWLEDGE_PA
   const [content, setContent] = useState('')
   const [saving, setSaving]   = useState(false)
   const [loaded, setLoaded]   = useState(false)
+  const [error, setError]     = useState<string | null>(null)
 
   useEffect(() => {
     supabase.from('notebook_pages').select('content').eq('slug', page.slug).maybeSingle()
@@ -227,7 +228,14 @@ function KnowledgeEditor({ page, onClose, onSaved }: { page: typeof KNOWLEDGE_PA
 
   async function save() {
     setSaving(true)
-    await supabase.from('notebook_pages').upsert({ slug: page.slug, title: page.title, content }, { onConflict: 'user_id,slug' })
+    setError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Not signed in'); setSaving(false); return }
+    const { error: err } = await supabase.from('notebook_pages').upsert(
+      { user_id: user.id, slug: page.slug, title: page.title, content, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,slug' }
+    )
+    if (err) { setError(err.message); setSaving(false); return }
     onSaved(content)
     setSaving(false)
     onClose()
@@ -261,7 +269,8 @@ function KnowledgeEditor({ page, onClose, onSaved }: { page: typeof KNOWLEDGE_PA
               style={{ flex: 1, padding: '20px 24px', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, fontFamily: 'inherit' }}
               autoFocus
             />
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
+              {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1 }}>{error}</p>}
               <button onClick={onClose} style={{ fontSize: 13, padding: '8px 16px', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
               <button onClick={save} disabled={saving} className="btn-primary" style={{ fontSize: 13 }}>{saving ? 'Saving…' : 'Save'}</button>
             </div>
