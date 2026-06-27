@@ -3,26 +3,43 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { LayoutDashboard, BookOpen, TrendingUp, Sparkles, Settings, Plus, LogOut, Moon, Sun, BookMarked, PenLine, Calculator } from 'lucide-react'
+import {
+  LayoutDashboard, BookOpen, TrendingUp, Sparkles, Settings,
+  Plus, LogOut, Moon, Sun, BookMarked, PenLine, Calculator, BookText,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/trades',    label: 'Trades',    icon: BookOpen },
-  { href: '/playbook',  label: 'Playbook',  icon: BookMarked },
-  { href: '/journal',   label: 'Journal',   icon: PenLine },
-  { href: '/analytics', label: 'Analytics', icon: TrendingUp },
-  { href: '/tools',     label: 'Tools',     icon: Calculator },
-  { href: '/coach',     label: 'Coach',     icon: Sparkles, ai: true },
-  { href: '/settings',  label: 'Settings',  icon: Settings },
+// Groups of nav items — rendered with a divider between each group
+const NAV_GROUPS = [
+  [
+    { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  ],
+  [
+    { href: '/journal',  label: 'Journal',  icon: PenLine },
+    { href: '/notebook', label: 'Notebook', icon: BookText },
+  ],
+  [
+    { href: '/trades',    label: 'Trades',    icon: BookOpen },
+    { href: '/analytics', label: 'Analytics', icon: TrendingUp },
+  ],
+  [
+    { href: '/playbook', label: 'Playbook', icon: BookMarked },
+  ],
+  [
+    { href: '/coach', label: 'AI Coach', icon: Sparkles, ai: true },
+    { href: '/tools', label: 'Tools',     icon: Calculator },
+  ],
+  [
+    { href: '/settings', label: 'Settings', icon: Settings },
+  ],
 ]
 
-const MOBILE_NAV = NAV.filter(n => ['/dashboard', '/trades', '/playbook', '/journal', '/analytics'].includes(n.href))
-
+const ALL_NAV = NAV_GROUPS.flat()
+const MOBILE_NAV = ['/dashboard', '/journal', '/notebook', '/trades', '/analytics']
+  .map(href => ALL_NAV.find(n => n.href === href)!)
 
 function useDarkMode() {
   const [dark, setDark] = useState(false)
-
   useEffect(() => {
     const stored = localStorage.getItem('theme')
     if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -30,7 +47,6 @@ function useDarkMode() {
       document.documentElement.classList.add('dark')
     }
   }, [])
-
   function toggle() {
     setDark(d => {
       const next = !d
@@ -39,7 +55,6 @@ function useDarkMode() {
       return next
     })
   }
-
   return { dark, toggle }
 }
 
@@ -68,6 +83,7 @@ function Sidebar({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => vo
       height: '100vh', zIndex: 40,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
     }}>
+      {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/logo.png" alt="Compass" style={{ width: 28, height: 28, borderRadius: 7, flexShrink: 0, objectFit: 'cover' }} />
@@ -85,27 +101,41 @@ function Sidebar({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => vo
 
       <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 12px', flexShrink: 0 }} />
 
-      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', minHeight: 0 }}>
-        {NAV.map(({ href, label, icon: Icon, ai }) => {
-          const active = path === href || path.startsWith(href + '/')
-          return (
-            <Link key={href} href={href} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 10px', borderRadius: 6,
-              fontSize: 14, fontWeight: active ? 500 : 400,
-              color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-              background: active ? 'var(--bg-elevated)' : 'transparent',
-              textDecoration: 'none', transition: 'all 0.1s',
-            }}>
-              <Icon size={16} strokeWidth={active ? 2 : 1.75} style={{ color: ai && !active ? 'var(--ai-accent)' : 'inherit', flexShrink: 0 }} />
-              <span style={{ flex: 1 }}>{label === 'Coach' ? 'AI Coach' : label}</span>
-              {ai && <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>AI</span>}
-            </Link>
-          )
-        })}
+      {/* Nav groups */}
+      <nav style={{ flex: 1, padding: '10px 8px', display: 'flex', flexDirection: 'column', overflowY: 'auto', minHeight: 0 }}>
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi}>
+            {gi > 0 && (
+              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '6px 4px' }} />
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {group.map(({ href, label, icon: Icon, ai }) => {
+                const active = path === href || path.startsWith(href + '/')
+                return (
+                  <Link key={href} href={href} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '7px 10px', borderRadius: 6,
+                    fontSize: 14, fontWeight: active ? 500 : 400,
+                    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    background: active ? 'var(--bg-elevated)' : 'transparent',
+                    textDecoration: 'none', transition: 'all 0.1s',
+                  }}>
+                    <Icon size={16} strokeWidth={active ? 2 : 1.75}
+                      style={{ color: (ai && !active) ? 'var(--ai-accent)' : 'inherit', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{label}</span>
+                    {ai && (
+                      <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)' }}>AI</span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div style={{ padding: '12px 8px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0 }}>
+      {/* Log trade */}
+      <div style={{ padding: '10px 8px', borderTop: '1px solid var(--border-subtle)', flexShrink: 0 }}>
         <Link href="/trades/new" style={{
           display: 'flex', alignItems: 'center', gap: 10,
           padding: '8px 10px', borderRadius: 6,
@@ -164,7 +194,8 @@ function MobileBottomNav() {
             textDecoration: 'none', padding: '8px 4px',
             color: active ? 'var(--text-primary)' : 'var(--text-muted)',
           }}>
-            <Icon size={21} strokeWidth={active ? 2 : 1.75} style={{ color: ai && !active ? 'var(--ai-accent)' : undefined }} />
+            <Icon size={20} strokeWidth={active ? 2 : 1.75}
+              style={{ color: (ai && !active) ? 'var(--ai-accent)' : undefined }} />
             <span style={{ fontSize: 10, fontWeight: active ? 600 : 400 }}>{label}</span>
           </Link>
         )
@@ -175,7 +206,6 @@ function MobileBottomNav() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { dark, toggle } = useDarkMode()
-
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       <Sidebar dark={dark} onToggleDark={toggle} />

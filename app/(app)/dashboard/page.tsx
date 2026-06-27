@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, TrendingUp, TrendingDown, Plus, Target } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Plus, Target, Zap } from 'lucide-react'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { supabase } from '@/lib/supabase'
 
-// ─── Calendar ─────────────────────────────────────────────────────────────────
+// ─── P&L Calendar ────────────────────────────────────────────────────────────
 
 function PnLCalendar({ trades }: { trades: any[] }) {
   const today = new Date()
@@ -39,7 +39,7 @@ function PnLCalendar({ trades }: { trades: any[] }) {
     ...Array(totalCells - offset - days.length).fill(null),
   ]
 
-  const monthTrades = trades.filter(t => {
+  const monthTrades  = trades.filter(t => {
     const d = (t.trade_date || t.created_at || '').split('T')[0]
     return days.length > 0 && d >= days[0].date && d <= days[days.length - 1].date
   })
@@ -52,7 +52,6 @@ function PnLCalendar({ trades }: { trades: any[] }) {
 
   return (
     <div>
-      {/* nav row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setViewDate(new Date(year, month - 1, 1))} style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -74,14 +73,12 @@ function PnLCalendar({ trades }: { trades: any[] }) {
         </div>
       </div>
 
-      {/* day labels */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 3 }}>
         {['M','T','W','T','F','S','S'].map((d, i) => (
           <div key={i} style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-disabled)', textAlign: 'center', letterSpacing: '0.04em', paddingBottom: 2 }}>{d}</div>
         ))}
       </div>
 
-      {/* grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
         {cells.map((cell, i) => {
           if (!cell) return <div key={i} />
@@ -116,29 +113,115 @@ function PnLCalendar({ trades }: { trades: any[] }) {
   )
 }
 
+// ─── Daily limit widget ───────────────────────────────────────────────────────
+
+function DailyLimitWidget({ todayCount, limit, onSetLimit }: {
+  todayCount: number
+  limit: number | null
+  onSetLimit: (n: number | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [input, setInput]     = useState('')
+
+  const pct      = limit ? Math.min(todayCount / limit * 100, 100) : 0
+  const exceeded = limit ? todayCount > limit : false
+  const atLimit  = limit ? todayCount === limit : false
+  const barColor = exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--accent)'
+  const textColor = exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--text-primary)'
+
+  function save() {
+    const n = parseInt(input)
+    if (n > 0) {
+      onSetLimit(n)
+      localStorage.setItem('dailyTradeLimit', String(n))
+    } else {
+      onSetLimit(null)
+      localStorage.removeItem('dailyTradeLimit')
+    }
+    setEditing(false)
+  }
+
+  return (
+    <div className="card" style={{ padding: '22px 24px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Zap size={12} style={{ color: 'var(--text-muted)' }} />
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Daily trade limit</p>
+        </div>
+        {!editing && (
+          <button onClick={() => { setInput(limit ? String(limit) : ''); setEditing(true) }} style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            {limit ? 'Edit' : 'Set limit'}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            className="input" type="number" min="1" max="20"
+            placeholder="Max trades per day (e.g. 3)"
+            value={input} onChange={e => setInput(e.target.value)}
+            style={{ fontSize: 13 }} autoFocus
+            onKeyDown={e => e.key === 'Enter' && save()}
+          />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn-primary" style={{ fontSize: 12, flex: 1 }} onClick={save}>Save</button>
+            <button style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </div>
+      ) : limit ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontSize: 32, fontWeight: 700, color: textColor, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1 }}>
+              {todayCount}
+            </span>
+            <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 400 }}>/ {limit}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>today</span>
+          </div>
+          <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, background: barColor, transition: 'width 0.4s ease' }} />
+          </div>
+          <p style={{ fontSize: 11, color: exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--text-muted)' }}>
+            {exceeded
+              ? `${todayCount - limit} over limit — stop trading for today`
+              : atLimit
+              ? 'Limit reached — protect your discipline'
+              : `${limit - todayCount} trade${limit - todayCount !== 1 ? 's' : ''} remaining today`}
+          </p>
+        </>
+      ) : (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Set a daily maximum to protect your discipline</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-type Period = '1M' | '3M' | '6M' | 'All'
-const PERIODS: Period[] = ['1M', '3M', '6M', 'All']
+type Period = '1W' | '1M' | '3M' | '6M' | '1Y' | 'All'
+const PERIODS: Period[] = ['1W', '1M', '3M', '6M', '1Y', 'All']
 
 export default function DashboardPage() {
-  const [trades, setTrades]             = useState<any[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [period, setPeriod]             = useState<Period>('All')
-  const [weeklyGoal, setWeeklyGoal]     = useState('')
+  const [trades, setTrades]               = useState<any[]>([])
+  const [loading, setLoading]             = useState(true)
+  const [period, setPeriod]               = useState<Period>('All')
+  const [weeklyGoal, setWeeklyGoal]       = useState('')
   const [weeklyGoalMode, setWeeklyGoalMode] = useState<'dollar' | 'percent'>('dollar')
-  const [accountSize, setAccountSize]   = useState('')
-  const [editingGoal, setEditingGoal]   = useState(false)
-  const [goalInput, setGoalInput]       = useState('')
-  const [accountInput, setAccountInput] = useState('')
+  const [accountSize, setAccountSize]     = useState('')
+  const [editingGoal, setEditingGoal]     = useState(false)
+  const [goalInput, setGoalInput]         = useState('')
+  const [accountInput, setAccountInput]   = useState('')
+  const [dailyLimit, setDailyLimit]       = useState<number | null>(null)
 
   useEffect(() => {
     const g = localStorage.getItem('weeklyGoal')
     const m = localStorage.getItem('weeklyGoalMode') as 'dollar' | 'percent' | null
     const a = localStorage.getItem('accountSize')
+    const l = localStorage.getItem('dailyTradeLimit')
     if (g) setWeeklyGoal(g)
     if (m) setWeeklyGoalMode(m)
     if (a) setAccountSize(a)
+    if (l) setDailyLimit(parseInt(l))
 
     supabase.from('trades')
       .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type, followed_plan, confidence, notes, screenshot_url')
@@ -147,7 +230,7 @@ export default function DashboardPage() {
       .then(({ data }) => { setTrades(data || []); setLoading(false) })
   }, [])
 
-  // ── stats ──
+  // ── All-time stats ──
   const totalTrades  = trades.length
   const wins         = trades.filter(t => Number(t.pnl) > 0)
   const losses       = trades.filter(t => Number(t.pnl) < 0)
@@ -158,7 +241,7 @@ export default function DashboardPage() {
   const grossLoss    = Math.abs(losses.reduce((s, t) => s + Number(t.pnl), 0))
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0
 
-  // ── streak ──
+  // ── Streak ──
   let currentStreak = 0, streakIsWin = false
   for (let i = 0; i < trades.length; i++) {
     const w = Number(trades[i].pnl) > 0
@@ -167,7 +250,7 @@ export default function DashboardPage() {
     else break
   }
 
-  // ── discipline ──
+  // ── Discipline ──
   const typedTrades = trades.filter(t => t.trade_type)
   const plannedPct  = typedTrades.length > 0 ? typedTrades.filter(t => t.trade_type === 'planned').length / typedTrades.length : 0
   const followedPct = totalTrades > 0 ? trades.filter(t => t.followed_plan).length / totalTrades : 0
@@ -177,17 +260,19 @@ export default function DashboardPage() {
   const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalPct * 10) : null
   const discColor   = disciplineScore == null ? 'var(--text-primary)' : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
 
-  // ── today ──
+  // ── Today ──
   const todayStr    = new Date().toDateString()
   const todayTrades = trades.filter(t => new Date(t.trade_date || t.created_at).toDateString() === todayStr)
   const todayPnl    = todayTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
   const todayReturn = todayTrades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
+  const todayWins   = todayTrades.filter(t => Number(t.pnl) > 0)
+  const todayWinPct = todayTrades.length > 0 ? Math.round(todayWins.length / todayTrades.length * 100) : 0
 
-  // ── equity curve ──
+  // ── Equity curve ──
   const curveAll = [...trades].reverse()
   const curveTrades = period === 'All' ? curveAll : (() => {
-    const days = period === '1M' ? 30 : period === '3M' ? 90 : 180
-    const cutoff = new Date(Date.now() - days * 86400000)
+    const daysMap: Record<Period, number> = { '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365, 'All': 0 }
+    const cutoff = new Date(Date.now() - daysMap[period] * 86400000)
     return curveAll.filter(t => new Date(t.trade_date || t.created_at) >= cutoff)
   })()
   const equityData = curveTrades.reduce((acc: any[], t, i) => {
@@ -200,7 +285,7 @@ export default function DashboardPage() {
     return acc
   }, [])
 
-  // ── insight ──
+  // ── Insight ──
   const insightText = (() => {
     if (totalTrades === 0) return 'Log your first trade to unlock performance insights.'
     const planned   = trades.filter(t => t.trade_type === 'planned')
@@ -213,7 +298,7 @@ export default function DashboardPage() {
     return `${planned.length + impulsive.length} of ${totalTrades} trades have type logged.`
   })()
 
-  // ── weekly goal ──
+  // ── Weekly goal ──
   const now    = new Date()
   const dow    = now.getDay()
   const monday = new Date(now)
@@ -239,27 +324,14 @@ export default function DashboardPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
 
-      {/* ═══════════════════════════════════════════════════════════
-          HERO — the return number IS the header
-          ═══════════════════════════════════════════════════════════ */}
+      {/* ── Hero ── */}
       <div style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '40px 56px 32px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
 
-          {/* top row: greeting + actions */}
+          {/* greeting + actions */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{greeting}</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {todayTrades.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: todayPnl >= 0 ? 'var(--profit-dim)' : 'var(--loss-dim)', border: `1px solid ${todayPnl >= 0 ? 'rgba(61,153,112,0.2)' : 'rgba(192,57,43,0.2)'}` }}>
-                  {todayPnl >= 0 ? <TrendingUp size={12} style={{ color: 'var(--profit)' }} /> : <TrendingDown size={12} style={{ color: 'var(--loss)' }} />}
-                  <span style={{ fontSize: 12, fontWeight: 600, color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-                    {todayPnl >= 0 ? '+' : ''}${Math.abs(todayPnl).toFixed(2)} today
-                  </span>
-                  <span style={{ fontSize: 11, color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', opacity: 0.7 }}>
-                    {todayReturn >= 0 ? '+' : ''}{todayReturn.toFixed(2)}%
-                  </span>
-                </div>
-              )}
               <Link href="/journal" className="btn-secondary" style={{ fontSize: 12 }}>Journal</Link>
               <Link href="/trades/new" className="btn-primary" style={{ fontSize: 12 }}>
                 <Plus size={12} strokeWidth={2.5} />Log trade
@@ -267,7 +339,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* hero number */}
+          {/* hero number + all-time stats */}
           <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 10 }}>
@@ -278,15 +350,14 @@ export default function DashboardPage() {
                   all-time return
                 </span>
               </div>
-              {/* inline secondary stats — no cards, just text */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                 {[
-                  { label: 'P&L',         value: `${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}`,   color: isUp ? 'var(--profit)' : 'var(--loss)' },
-                  { label: 'Win rate',    value: `${winRate.toFixed(1)}%`,      color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
-                  { label: 'Trades',      value: String(totalTrades),           color: 'var(--text-primary)' },
-                  { label: 'Profit factor', value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
-                  { label: 'Streak',      value: currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'}` : '—', color: currentStreak > 0 ? (streakIsWin ? 'var(--profit)' : 'var(--loss)') : 'var(--text-primary)' },
-                  { label: 'Discipline',  value: disciplineScore !== null ? String(disciplineScore) : '—', color: discColor },
+                  { label: 'P&L',           value: `${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}`,  color: isUp ? 'var(--profit)' : 'var(--loss)' },
+                  { label: 'Win rate',       value: `${winRate.toFixed(1)}%`,     color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
+                  { label: 'Trades',         value: String(totalTrades),          color: 'var(--text-primary)' },
+                  { label: 'Profit factor',  value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
+                  { label: 'Streak',         value: currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'}` : '—', color: currentStreak > 0 ? (streakIsWin ? 'var(--profit)' : 'var(--loss)') : 'var(--text-primary)' },
+                  { label: 'Discipline',     value: disciplineScore !== null ? String(disciplineScore) : '—', color: discColor },
                 ].map((s, i, arr) => (
                   <div key={s.label} style={{ display: 'flex', alignItems: 'center' }}>
                     <div style={{ padding: '0 20px', borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', ...(i === 0 ? { paddingLeft: 0 } : {}) }}>
@@ -298,7 +369,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Moneytaur quote — right-aligned, editorial */}
             <div style={{ textAlign: 'right', paddingBottom: 6, flexShrink: 0 }}>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.06em', lineHeight: 1.9 }}>
                 Find · Plan · Wait · Execute · Review · Repeat
@@ -306,16 +376,30 @@ export default function DashboardPage() {
               <p style={{ fontSize: 11, color: 'var(--text-disabled)', fontStyle: 'italic', marginTop: 2 }}>— Moneytaur</p>
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════
-          MAIN CONTENT
-          ═══════════════════════════════════════════════════════════ */}
+      {/* ── Main content ── */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-        {/* ── Equity curve — full width, dominant ── */}
+        {/* Today strip */}
+        {todayTrades.length > 0 && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[
+              { label: 'Today P&L',   value: `${todayPnl >= 0 ? '+' : ''}$${Math.abs(todayPnl).toFixed(2)}`,  color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+              { label: 'Win rate',    value: `${todayWinPct}%`, color: todayWinPct >= 50 ? 'var(--profit)' : 'var(--loss)' },
+              { label: 'Return',      value: `${todayReturn >= 0 ? '+' : ''}${todayReturn.toFixed(2)}%`, color: todayReturn >= 0 ? 'var(--profit)' : 'var(--loss)' },
+              { label: 'Trades',      value: dailyLimit ? `${todayTrades.length} / ${dailyLimit}` : String(todayTrades.length), color: dailyLimit && todayTrades.length > dailyLimit ? 'var(--loss)' : 'var(--text-primary)' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 5 }}>{s.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Equity curve */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Equity curve</p>
@@ -344,10 +428,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Middle row: Calendar + Recent trades ── */}
+        {/* Middle: Calendar + Recent trades */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 24 }}>
-
-          {/* Calendar */}
           <div>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>P&L calendar</p>
             <div className="card" style={{ padding: '18px 20px' }}>
@@ -355,7 +437,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Recent trades */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Recent trades</p>
@@ -380,6 +461,7 @@ export default function DashboardPage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                         <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
                         <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{up ? 'WIN' : 'LOSS'}</span>
                       </div>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.strategy || '—'}</span>
                     </div>
@@ -399,8 +481,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Bottom row: Weekly goal + Insight ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        {/* Bottom: Daily limit + Weekly goal + Insight */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24 }}>
+
+          {/* Daily limit */}
+          <DailyLimitWidget
+            todayCount={todayTrades.length}
+            limit={dailyLimit}
+            onSetLimit={setDailyLimit}
+          />
 
           {/* Weekly goal */}
           <div className="card" style={{ padding: '22px 24px' }}>
@@ -440,7 +529,6 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
-                {/* Week numbers in a row */}
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
                   <span style={{ fontSize: 32, fontWeight: 700, color: weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1 }}>
                     {weekPnl >= 0 ? '+' : '-'}${Math.abs(weekPnl).toFixed(2)}
@@ -469,7 +557,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Insight + Coach stacked */}
+          {/* Insight + Coach */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="card" style={{ padding: '18px 20px', borderLeft: '2px solid var(--ai-accent)', flex: 1 }}>
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 7 }}>Compass Insight</p>
@@ -483,8 +571,8 @@ export default function DashboardPage() {
               <Link href="/coach" style={{ fontSize: 12, color: 'var(--ai-accent)', textDecoration: 'none', fontWeight: 600, flexShrink: 0, marginLeft: 16 }}>Open →</Link>
             </div>
           </div>
-        </div>
 
+        </div>
       </div>
     </div>
   )
