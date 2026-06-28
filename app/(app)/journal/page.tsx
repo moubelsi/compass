@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 const MOODS = [
   { value: 1, emoji: '😔', label: 'Rough' },
@@ -92,7 +94,7 @@ function ReflectionField({ label, value, onChange, placeholder }: {
 }
 
 // ── Trade row ─────────────────────────────────────────────────────────────────
-function TradeRow({ trade }: { trade: any }) {
+function TradeRow({ trade, currencySymbol }: { trade: any; currencySymbol: string }) {
   const pnl   = Number(trade.pnl || 0)
   const isWin = pnl > 0
   return (
@@ -114,7 +116,7 @@ function TradeRow({ trade }: { trade: any }) {
           color: isWin ? 'var(--profit)' : 'var(--loss)',
         }}>{isWin ? 'WIN' : 'LOSS'}</span>
         <span style={{ fontSize: 13, fontWeight: 600, color: isWin ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', flex: 1 }}>
-          {pnl >= 0 ? '+' : ''}${Math.abs(pnl).toFixed(2)}
+          {formatCurrency(pnl, true, currencySymbol)}
         </span>
         {trade.rr != null && (
           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
@@ -122,12 +124,12 @@ function TradeRow({ trade }: { trade: any }) {
           </span>
         )}
         {trade.strategy && (
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+          <span className="journal-trade-meta" style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap' }}>
             {trade.strategy}
           </span>
         )}
         {trade.created_at && (
-          <span style={{ fontSize: 11, color: 'var(--text-disabled)', whiteSpace: 'nowrap' }}>
+          <span className="journal-trade-meta" style={{ fontSize: 11, color: 'var(--text-disabled)', whiteSpace: 'nowrap' }}>
             {formatTime(trade.created_at)}
           </span>
         )}
@@ -141,6 +143,7 @@ function TradeRow({ trade }: { trade: any }) {
 const EMPTY_FORM = { content: '', wentWell: '', wentWrong: '', biggestLesson: '', focusTomorrow: '' }
 
 export default function JournalPage() {
+  const { symbol }                      = useCurrency()
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
   const [form, setForm]                 = useState(EMPTY_FORM)
   const [savedForm, setSavedForm]       = useState(EMPTY_FORM)
@@ -257,7 +260,7 @@ export default function JournalPage() {
     <div style={{ background: 'var(--journal-ivory)', minHeight: '100vh' }}>
 
       {/* ── Page header ── */}
-      <div style={{
+      <div className="journal-header-pad" style={{
         position: 'relative', overflow: 'hidden',
         padding: '36px 56px 28px',
         borderBottom: '1px solid var(--border-subtle)',
@@ -273,7 +276,7 @@ export default function JournalPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 56px 60px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div className="journal-body" style={{ maxWidth: 760, margin: '0 auto', padding: '24px 56px 60px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
         {/* ── Date navigator ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -303,7 +306,7 @@ export default function JournalPage() {
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{formatFullDate(selectedDate)}</span>
               <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-strong)', flexShrink: 0 }} />
               <span style={{ fontSize: 14, fontWeight: 600, color: dayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-                {dayPnl >= 0 ? '+' : ''}${Math.abs(dayPnl).toFixed(2)}
+                {formatCurrency(dayPnl, true, symbol)}
               </span>
               <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-strong)', flexShrink: 0 }} />
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -312,10 +315,10 @@ export default function JournalPage() {
             </div>
 
             {/* Stats cards */}
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="journal-stat-grid" style={{ display: 'flex', gap: 8 }}>
               <StatCard
                 label="Net P&L"
-                value={`${dayPnl >= 0 ? '+' : ''}$${Math.abs(dayPnl).toFixed(2)}`}
+                value={formatCurrency(dayPnl, true, symbol)}
                 color={dayPnl >= 0 ? 'var(--profit)' : 'var(--loss)'}
               />
               <StatCard
@@ -330,7 +333,7 @@ export default function JournalPage() {
               />
               <StatCard
                 label="Avg Trade"
-                value={`${avgTrade >= 0 ? '+' : ''}$${Math.abs(avgTrade).toFixed(2)}`}
+                value={formatCurrency(avgTrade, true, symbol)}
                 color={avgTrade >= 0 ? 'var(--profit)' : 'var(--loss)'}
               />
               <StatCard
@@ -390,7 +393,7 @@ export default function JournalPage() {
             </div>
 
             {/* Reflection grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="journal-reflection-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <ReflectionField
                 label="What went well?"
                 value={form.wentWell}
@@ -449,7 +452,7 @@ export default function JournalPage() {
               Trades · {formatDisplay(selectedDate)}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {dayTrades.map(t => <TradeRow key={t.id} trade={t} />)}
+              {dayTrades.map(t => <TradeRow key={t.id} trade={t} currencySymbol={symbol} />)}
             </div>
           </div>
         )}
@@ -468,7 +471,7 @@ export default function JournalPage() {
               <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>AI Reflection</span>
               <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)', letterSpacing: '0.04em' }}>COMING SOON</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, opacity: 0.45 }}>
+            <div className="journal-ai-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, opacity: 0.45 }}>
               {([
                 { label: 'Strengths',      text: 'Discipline in following your plan. Clean entries on the first two setups.' },
                 { label: 'Watch out',      text: 'Signs of revenge trading after consecutive losses in the afternoon.' },
@@ -515,7 +518,7 @@ export default function JournalPage() {
                           <>
                             <span style={{ width: 2, height: 2, borderRadius: '50%', background: 'var(--border-strong)', flexShrink: 0 }} />
                             <span style={{ fontSize: 11, fontWeight: 600, color: dayStats.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-                              {dayStats.pnl >= 0 ? '+' : ''}${Math.abs(dayStats.pnl).toFixed(2)}
+                              {formatCurrency(dayStats.pnl, true, symbol)}
                             </span>
                             <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
                               · {dayStats.count} trade{dayStats.count !== 1 ? 's' : ''}

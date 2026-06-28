@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react'
 import { Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useCurrency, CURRENCY_OPTIONS } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 export default function SettingsPage() {
-  const [email, setEmail] = useState('')
+  const { symbol, setCurrency }         = useCurrency()
+  const [email, setEmail]               = useState('')
   const [loadingUser, setLoadingUser] = useState(true)
   const [trades, setTrades] = useState<any[]>([])
   const [exporting, setExporting] = useState(false)
@@ -122,7 +125,7 @@ export default function SettingsPage() {
                   {[
                     { label: 'Total trades', value: String(trades.length), color: undefined },
                     { label: 'Win rate', value: `${winRate}%`, color: Number(winRate) >= 50 ? 'var(--profit)' : 'var(--loss)' },
-                    { label: 'All-time P&L', value: `${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}`, color: totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                    { label: 'All-time P&L', value: formatCurrency(totalPnl, true, symbol), color: totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
                       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>{label}</p>
@@ -132,6 +135,25 @@ export default function SettingsPage() {
                 </div>
               )
             })()}
+          </div>
+        </div>
+
+        {/* Preferences */}
+        <div className="card" style={{ padding: 28 }}>
+          <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 20 }}>Preferences</p>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 6 }}>Currency</label>
+            <select
+              className="input"
+              value={symbol}
+              onChange={e => setCurrency(e.target.value)}
+              style={{ maxWidth: 200 }}
+            >
+              {CURRENCY_OPTIONS.map(opt => (
+                <option key={opt.symbol} value={opt.symbol}>{opt.label}</option>
+              ))}
+            </select>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Applies to P&L values across the app.</p>
           </div>
         </div>
 

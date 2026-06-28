@@ -247,6 +247,17 @@ body {
   .desktop-sidebar { display: none !important; }
   .page-fixed-bar  { left: 0 !important; top: var(--header-height) !important; }
   main { padding-left: 0 !important; padding-top: 52px !important; padding-bottom: 64px !important; }
+
+  /* Journal responsive */
+  .journal-header-pad { padding-left: 20px !important; padding-right: 20px !important; }
+  .journal-body       { padding-left: 16px !important; padding-right: 16px !important; }
+  .journal-stat-grid > * {
+    min-width: calc(50% - 4px) !important;
+    flex: 0 0 calc(50% - 4px) !important;
+  }
+  .journal-reflection-grid { grid-template-columns: 1fr !important; }
+  .journal-ai-grid         { grid-template-columns: 1fr !important; }
+  .journal-trade-meta      { display: none !important; }
 }
 
 /* ── Journal surface tokens ───────────────────────────────── */
