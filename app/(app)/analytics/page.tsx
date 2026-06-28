@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { CalendarHeatmap } from '@/components/charts/CalendarHeatmap'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 // Shape helpers replacing deprecated <Cell> — color each bar based on its value
 function pnlBarShape(props: any) {
@@ -31,14 +33,14 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
   )
 }
 
-function PnlTooltip({ active, payload, label }: any) {
+function PnlTooltip({ active, payload, label, symbol = '$' }: any) {
   if (!active || !payload?.length) return null
   const v = payload[0]?.value as number
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px' }}>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</p>
       <p style={{ fontSize: 14, fontWeight: 600, color: v >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-        {v >= 0 ? '+' : ''}${Math.abs(v).toFixed(2)}
+        {formatCurrency(v, true, symbol)}
       </p>
     </div>
   )
@@ -58,14 +60,14 @@ function MonthTooltip({ active, payload, label }: any) {
   )
 }
 
-function BarTooltip({ active, payload, label }: any) {
+function BarTooltip({ active, payload, label, symbol = '$' }: any) {
   if (!active || !payload?.length) return null
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 6, padding: '8px 12px' }}>
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} style={{ fontSize: 13, fontWeight: 500, color: p.value >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-          {p.name === 'winRate' ? `${p.value.toFixed(1)}%` : `${p.value >= 0 ? '+' : ''}$${Math.abs(p.value).toFixed(2)}`}
+          {p.name === 'winRate' ? `${p.value.toFixed(1)}%` : formatCurrency(p.value, true, symbol)}
         </p>
       ))}
     </div>
@@ -92,6 +94,7 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
 }
 
 export default function AnalyticsPage() {
+  const { symbol }                = useCurrency()
   const [allTrades, setAllTrades] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [period, setPeriod]       = useState<Period>('All')
@@ -297,17 +300,17 @@ export default function AnalyticsPage() {
           <SectionHeader title="Overview" />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 12 }}>
             <StatCard label="Return" value={`${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`} sub="Cumulative" color={totalReturn >= 0 ? 'var(--profit)' : 'var(--loss)'} />
-            <StatCard label="Total P&L" value={`${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} sub="All time" color={totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)'} />
+            <StatCard label="Total P&L" value={formatCurrency(totalPnl, true, symbol)} sub="All time" color={totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)'} />
             <StatCard label="Win rate" value={`${winRate.toFixed(1)}%`} sub={`${wins.length}W · ${losses.length}L`} color={winRate >= 50 ? 'var(--profit)' : 'var(--loss)'} />
             <StatCard label="Profit factor" value={profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—'} sub="Gross profit / loss" />
             <StatCard label="Avg R:R" value={avgRR > 0 ? avgRR.toFixed(2) : '—'} sub="Per trade" />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
-            <StatCard label="Avg win" value={avgWin > 0 ? `+$${avgWin.toFixed(2)}` : '—'} color="var(--profit)" />
-            <StatCard label="Avg loss" value={avgLoss > 0 ? `-$${avgLoss.toFixed(2)}` : '—'} color="var(--loss)" />
+            <StatCard label="Avg win" value={avgWin > 0 ? formatCurrency(avgWin, true, symbol) : '—'} color="var(--profit)" />
+            <StatCard label="Avg loss" value={avgLoss > 0 ? `-${symbol}${avgLoss.toFixed(2)}` : '—'} color="var(--loss)" />
             <StatCard label="Max drawdown" value={maxDrawdown > 0 ? `-${maxDrawdown.toFixed(2)}%` : '—'} sub="Peak-to-trough" color={maxDrawdown > 0 ? 'var(--loss)' : undefined} />
-            <StatCard label="Best trade" value={bestTrade?.symbol ? `+$${Math.abs(Number(bestTrade.pnl)).toFixed(2)}` : '—'} sub={bestTrade?.symbol ?? ''} color="var(--profit)" />
-            <StatCard label="Worst trade" value={worstTrade?.symbol ? `-$${Math.abs(Number(worstTrade.pnl)).toFixed(2)}` : '—'} sub={worstTrade?.symbol ?? ''} color="var(--loss)" />
+            <StatCard label="Best trade" value={bestTrade?.symbol ? formatCurrency(Number(bestTrade.pnl), true, symbol) : '—'} sub={bestTrade?.symbol ?? ''} color="var(--profit)" />
+            <StatCard label="Worst trade" value={worstTrade?.symbol ? formatCurrency(Number(worstTrade.pnl), true, symbol) : '—'} sub={worstTrade?.symbol ?? ''} color="var(--loss)" />
           </div>
         </div>
 
@@ -316,7 +319,7 @@ export default function AnalyticsPage() {
           <SectionHeader title="Equity curve" sub="Cumulative % return per trade" />
           <div className="card" style={{ height: 320, padding: '20px 16px 10px' }}>
             {equityData.length > 1
-              ? <EquityCurve data={equityData} />
+              ? <EquityCurve data={equityData} currencySymbol={symbol} />
               : <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 14 }}>Not enough data yet</div>
             }
           </div>
@@ -327,7 +330,7 @@ export default function AnalyticsPage() {
           <div>
             <SectionHeader title="Trading activity" sub="Daily P&L heatmap" />
             <div className="card" style={{ padding: '20px 24px 16px' }}>
-              <CalendarHeatmap data={calendarData} />
+              <CalendarHeatmap data={calendarData} currencySymbol={symbol} />
             </div>
           </div>
         )}
@@ -345,9 +348,9 @@ export default function AnalyticsPage() {
                     <BarChart data={monthlyData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
                       {chartShared.cartesian}
                       <XAxis dataKey="name" {...chartShared.xProps} />
-                      <YAxis {...chartShared.yProps} tickFormatter={v => `$${v}`} width={52} />
+                      <YAxis {...chartShared.yProps} tickFormatter={v => `${symbol}${v}`} width={52} />
                       <ReferenceLine y={0} stroke="var(--border-default)" strokeWidth={1} />
-                      <Tooltip content={<PnlTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Tooltip content={<PnlTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                       <Bar dataKey="pnl" shape={pnlBarShape} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -390,9 +393,9 @@ export default function AnalyticsPage() {
                     <BarChart data={strategyData} margin={{ top: 4, right: 4, bottom: 24, left: 4 }}>
                       {chartShared.cartesian}
                       <XAxis dataKey="name" {...chartShared.xProps} angle={-20} textAnchor="end" />
-                      <YAxis {...chartShared.yProps} tickFormatter={v => `$${v}`} width={52} />
+                      <YAxis {...chartShared.yProps} tickFormatter={v => `${symbol}${v}`} width={52} />
                       <ReferenceLine y={0} stroke="var(--border-default)" strokeWidth={1} />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                       <Bar dataKey="pnl" shape={pnlBarShape} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -411,7 +414,7 @@ export default function AnalyticsPage() {
                       <XAxis dataKey="name" {...chartShared.xProps} angle={-20} textAnchor="end" />
                       <YAxis {...chartShared.yProps} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                       <ReferenceLine y={50} stroke="var(--border-default)" strokeDasharray="4 2" strokeWidth={1} />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                       <Bar dataKey="winRate" shape={winRateBarShape} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -428,9 +431,9 @@ export default function AnalyticsPage() {
                     <BarChart data={dayData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
                       {chartShared.cartesian}
                       <XAxis dataKey="name" {...chartShared.xProps} />
-                      <YAxis {...chartShared.yProps} tickFormatter={v => `$${v}`} width={52} />
+                      <YAxis {...chartShared.yProps} tickFormatter={v => `${symbol}${v}`} width={52} />
                       <ReferenceLine y={0} stroke="var(--border-default)" strokeWidth={1} />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                       <Bar dataKey="pnl" shape={pnlBarShape} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -449,7 +452,7 @@ export default function AnalyticsPage() {
                       <XAxis dataKey="name" {...chartShared.xProps} />
                       <YAxis {...chartShared.yProps} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                       <ReferenceLine y={50} stroke="var(--border-default)" strokeDasharray="4 2" strokeWidth={1} />
-                      <Tooltip content={<BarTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                       <Bar dataKey="winRate" shape={winRateBarShape} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -468,9 +471,9 @@ export default function AnalyticsPage() {
                 <BarChart data={hourData} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
                   {chartShared.cartesian}
                   <XAxis dataKey="name" {...chartShared.xProps} interval={1} />
-                  <YAxis {...chartShared.yProps} tickFormatter={v => `$${v}`} width={52} />
+                  <YAxis {...chartShared.yProps} tickFormatter={v => `${symbol}${v}`} width={52} />
                   <ReferenceLine y={0} stroke="var(--border-default)" strokeWidth={1} />
-                  <Tooltip content={<BarTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                  <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
                   <Bar dataKey="pnl" shape={pnlBarShape} />
                 </BarChart>
               </ResponsiveContainer>
@@ -497,7 +500,7 @@ export default function AnalyticsPage() {
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.trades}</span>
                     <span style={{ fontSize: 13, fontWeight: 500, color: wr >= 50 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{wr.toFixed(1)}%</span>
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{avgRr.toFixed(2)}R</span>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.pnl >= 0 ? '+' : ''}${Math.abs(s.pnl).toFixed(2)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.pnl, true, symbol)}</span>
                   </div>
                 )
               })}
@@ -550,7 +553,7 @@ export default function AnalyticsPage() {
                     <span style={{ fontSize: 13, fontWeight: 500, color: wr >= 50 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{wr.toFixed(1)}%</span>
                     <span style={{ fontSize: 13, color: 'var(--profit)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.wins} ({wr.toFixed(1)}%)</span>
                     <span style={{ fontSize: 13, color: 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.losses} ({(100 - wr).toFixed(1)}%)</span>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{s.pnl >= 0 ? '+' : ''}${Math.abs(s.pnl).toFixed(2)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.pnl, true, symbol)}</span>
                   </div>
                 )
               })}

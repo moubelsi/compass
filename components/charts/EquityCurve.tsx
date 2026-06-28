@@ -1,6 +1,6 @@
 'use client'
 
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 
 interface DataPoint {
   date: string
@@ -8,7 +8,7 @@ interface DataPoint {
   pnl?: number
 }
 
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, currencySymbol = '$' }: any) {
   if (!active || !payload?.length) return null
   const v   = payload[0]?.value as number
   const pnl = payload[0]?.payload?.pnl as number | undefined
@@ -22,7 +22,7 @@ function CustomTooltip({ active, payload, label }: any) {
       </p>
       {pnl !== undefined && (
         <p style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', marginTop: 4 }}>
-          {pnl >= 0 ? '+' : ''}${Math.abs(pnl).toFixed(2)}
+          {pnl >= 0 ? '+' : ''}{currencySymbol}{Math.abs(pnl).toFixed(2)}
         </p>
       )}
     </div>
@@ -33,7 +33,7 @@ function formatAxis(v: number): string {
   return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 }
 
-export function EquityCurve({ data }: { data: DataPoint[] }) {
+export function EquityCurve({ data, currencySymbol = '$' }: { data: DataPoint[]; currencySymbol?: string }) {
   if (!data.length) return null
   const isUp = data[data.length - 1].value >= 0
   const color = isUp ? 'var(--profit)' : 'var(--loss)'
@@ -47,9 +47,11 @@ export function EquityCurve({ data }: { data: DataPoint[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" horizontal vertical={false} />
+        {/* 0% baseline — more prominent than regular grid lines */}
+        <ReferenceLine y={0} stroke="var(--border-strong)" strokeWidth={1} />
         <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" tickMargin={8} />
         <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={formatAxis} width={58} domain={['auto', 'auto']} />
-        <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '3 3' }} />
+        <Tooltip content={<CustomTooltip currencySymbol={currencySymbol} />} cursor={{ stroke: 'var(--border-default)', strokeWidth: 1, strokeDasharray: '3 3' }} />
         <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.5} fill="url(#grad)" dot={false} activeDot={{ r: 3.5, fill: color, stroke: 'var(--bg-surface)', strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
