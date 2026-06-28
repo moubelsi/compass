@@ -73,42 +73,57 @@ function PnLCalendar({ trades }: { trades: any[] }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 3 }}>
+      {/* Headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr) 52px', gap: 3, marginBottom: 3 }}>
         {['M','T','W','T','F','S','S'].map((d, i) => (
           <div key={i} style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-disabled)', textAlign: 'center', letterSpacing: '0.04em', paddingBottom: 2 }}>{d}</div>
         ))}
+        <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-disabled)', textAlign: 'center', letterSpacing: '0.04em', paddingBottom: 2 }}>Wk</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
-        {cells.map((cell, i) => {
-          if (!cell) return <div key={i} />
-          const data     = dayMap[cell.date]
-          const isToday  = cell.date === todayStr
-          const isFuture = cell.date > todayStr
-          const alpha    = data ? Math.max(0.1, Math.abs(data.pnl) / maxAbs) * 0.5 : 0
-          const bg = data
-            ? data.pnl >= 0 ? `rgba(61,153,112,${alpha})` : `rgba(192,57,43,${alpha})`
-            : 'transparent'
-          return (
-            <div key={cell.date}
-              title={data ? `${data.pnl >= 0 ? '+' : ''}$${data.pnl.toFixed(2)} · ${data.count}t` : undefined}
-              style={{
-                borderRadius: 4, padding: '5px 2px 4px', textAlign: 'center',
-                background: bg,
-                border: isToday ? '1.5px solid var(--accent)' : '1px solid transparent',
-                opacity: isFuture ? 0.2 : 1,
-                minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1,
-              }}>
-              <span style={{ fontSize: 9.5, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent)' : data ? 'var(--text-secondary)' : 'var(--text-disabled)', lineHeight: 1 }}>{cell.n}</span>
-              {data && (
-                <span style={{ fontSize: 8, fontWeight: 600, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 1 }}>
-                  {data.pnl >= 0 ? '+' : ''}${Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : data.pnl.toFixed(0)}
-                </span>
+      {/* Weeks with weekly total column */}
+      {Array.from({ length: cells.length / 7 }, (_, wi) => {
+        const week     = cells.slice(wi * 7, wi * 7 + 7)
+        let wPnl = 0, wTrades = 0
+        week.forEach(c => { if (c && dayMap[c.date]) { wPnl += dayMap[c.date].pnl; wTrades += dayMap[c.date].count } })
+        return (
+          <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr) 52px', gap: 3, marginBottom: 3 }}>
+            {week.map((cell, ci) => {
+              if (!cell) return <div key={ci} />
+              const data     = dayMap[cell.date]
+              const isToday  = cell.date === todayStr
+              const isFuture = cell.date > todayStr
+              const alpha    = data ? Math.max(0.1, Math.abs(data.pnl) / maxAbs) * 0.5 : 0
+              const bg = data
+                ? data.pnl >= 0 ? `rgba(61,153,112,${alpha})` : `rgba(192,57,43,${alpha})`
+                : 'transparent'
+              return (
+                <div key={cell.date}
+                  title={data ? `${data.pnl >= 0 ? '+' : ''}$${data.pnl.toFixed(2)} · ${data.count}t` : undefined}
+                  style={{ borderRadius: 4, padding: '5px 2px 4px', textAlign: 'center', background: bg, border: isToday ? '1.5px solid var(--accent)' : '1px solid transparent', opacity: isFuture ? 0.2 : 1, minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent)' : data ? 'var(--text-secondary)' : 'var(--text-disabled)', lineHeight: 1 }}>{cell.n}</span>
+                  {data && (
+                    <span style={{ fontSize: 8, fontWeight: 600, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 1 }}>
+                      {data.pnl >= 0 ? '+' : ''}${Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : data.pnl.toFixed(0)}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+            {/* Weekly total */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 36, borderRadius: 4, background: wTrades > 0 ? (wPnl >= 0 ? 'var(--profit-dim)' : 'var(--loss-dim)') : 'transparent' }}>
+              {wTrades > 0 && (
+                <>
+                  <span style={{ fontSize: 8, fontWeight: 700, color: wPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {wPnl >= 0 ? '+' : ''}${Math.abs(wPnl) >= 1000 ? (wPnl / 1000).toFixed(1) + 'k' : Math.abs(wPnl).toFixed(0)}
+                  </span>
+                  <span style={{ fontSize: 7.5, color: 'var(--text-disabled)', lineHeight: 1, marginTop: 2 }}>{wTrades}t</span>
+                </>
               )}
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
