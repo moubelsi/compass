@@ -166,7 +166,7 @@ function DaySlideOver({ date, data, onClose }: { date: string; data: DayData; on
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Journal</p>
-              <Link href="/journal" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Edit →</Link>
+              <Link href={`/journal?date=${date}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Edit →</Link>
             </div>
             {entry ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

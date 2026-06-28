@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, Plus, Target, Zap } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Plus, Target, Zap, X, Sparkles } from 'lucide-react'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { supabase } from '@/lib/supabase'
 
 // ─── P&L Calendar ────────────────────────────────────────────────────────────
 
-function PnLCalendar({ trades }: { trades: any[] }) {
+function PnLCalendar({ trades, onDayClick }: { trades: any[]; onDayClick: (date: string) => void }) {
   const today = new Date()
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
 
@@ -98,16 +98,19 @@ function PnLCalendar({ trades }: { trades: any[] }) {
                 ? data.pnl >= 0 ? `rgba(61,153,112,${alpha})` : `rgba(192,57,43,${alpha})`
                 : 'transparent'
               return (
-                <div key={cell.date}
-                  title={data ? `${data.pnl >= 0 ? '+' : ''}$${data.pnl.toFixed(2)} · ${data.count}t` : undefined}
-                  style={{ borderRadius: 4, padding: '5px 2px 4px', textAlign: 'center', background: bg, border: isToday ? '1.5px solid var(--accent)' : '1px solid transparent', opacity: isFuture ? 0.2 : 1, minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1 }}>
+                <button key={cell.date}
+                  onClick={() => !isFuture && onDayClick(cell.date)}
+                  title={data ? `${data.pnl >= 0 ? '+' : ''}$${data.pnl.toFixed(2)} · ${data.count}t` : cell.date}
+                  style={{ borderRadius: 4, padding: '5px 2px 4px', textAlign: 'center', background: bg, border: isToday ? '1.5px solid var(--accent)' : '1px solid transparent', opacity: isFuture ? 0.2 : 1, minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1, cursor: isFuture ? 'default' : 'pointer', transition: 'filter 0.1s' }}
+                  onMouseEnter={e => { if (!isFuture) (e.currentTarget as HTMLElement).style.filter = 'brightness(1.15)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = '' }}>
                   <span style={{ fontSize: 9.5, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent)' : data ? 'var(--text-secondary)' : 'var(--text-disabled)', lineHeight: 1 }}>{cell.n}</span>
                   {data && (
                     <span style={{ fontSize: 8, fontWeight: 600, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 1 }}>
                       {data.pnl >= 0 ? '+' : ''}${Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : data.pnl.toFixed(0)}
                     </span>
                   )}
-                </div>
+                </button>
               )
             })}
             {/* Weekly total */}
@@ -125,6 +128,139 @@ function PnLCalendar({ trades }: { trades: any[] }) {
         )
       })}
     </div>
+  )
+}
+
+// ─── Day slide-over ───────────────────────────────────────────────────────────
+
+function DayPanel({ date, trades, entry, onClose }: {
+  date: string
+  trades: any[]
+  entry: { mood: string | null; content: string | null; went_well: string | null; went_wrong: string | null; biggest_lesson: string | null; focus_tomorrow: string | null } | null
+  onClose: () => void
+}) {
+  const pnl     = trades.reduce((s, t) => s + Number(t.pnl || 0), 0)
+  const ret     = trades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
+  const wins    = trades.filter(t => Number(t.pnl) > 0)
+  const winRate = trades.length > 0 ? Math.round(wins.length / trades.length * 100) : 0
+  const d       = new Date(date + 'T12:00:00')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 50, backdropFilter: 'blur(2px)' }} />
+      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 51, width: 460, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', overflowY: 'auto', boxShadow: '-16px 0 40px rgba(0,0,0,0.12)' }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexShrink: 0, position: 'sticky', top: 0, background: 'var(--bg-surface)', zIndex: 1 }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{d.toLocaleDateString('en-US', { weekday: 'long' })}</p>
+            <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>{d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</h2>
+          </div>
+          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)', flexShrink: 0 }}>
+            <X size={15} />
+          </button>
+        </div>
+
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Stats */}
+          {trades.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {[
+                { label: 'P&L',    value: `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`,       color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'Return', value: `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%`,                  color: ret >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'Trades', value: String(trades.length),                                        color: 'var(--text-primary)' },
+                { label: 'Win %',  value: `${winRate}%`,                                                color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
+              ].map(s => (
+                <div key={s.label} style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
+                  <p style={{ fontSize: 16, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Trades */}
+          {trades.length > 0 && (
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Trades</p>
+              <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                {trades.map((t, i) => {
+                  const up = Number(t.pnl) >= 0
+                  return (
+                    <Link key={t.id} href={`/trades/${t.id}`}
+                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < trades.length - 1 ? '1px solid var(--border-subtle)' : 'none', textDecoration: 'none', background: 'var(--bg-elevated)', transition: 'background 0.1s' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-overlay)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{up ? 'WIN' : 'LOSS'}</span>
+                        </div>
+                        {t.strategy && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.strategy}</span>}
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
+                        {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', minWidth: 68, textAlign: 'right' }}>
+                        {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {trades.length === 0 && (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>No trades on this day</p>
+          )}
+
+          {/* Journal */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Journal</p>
+              <Link href={`/journal?date=${date}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Edit →</Link>
+            </div>
+            {entry ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {entry.mood && <span style={{ fontSize: 20 }}>{entry.mood}</span>}
+                {[
+                  { label: 'Notes',          value: entry.content },
+                  { label: 'Went well',      value: entry.went_well },
+                  { label: 'Went wrong',     value: entry.went_wrong },
+                  { label: 'Biggest lesson', value: entry.biggest_lesson },
+                ].filter(f => f.value).map(f => (
+                  <div key={f.label} style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{f.label}</p>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{f.value}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: '14px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No entry for this day</p>
+                <Link href={`/journal?date=${date}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Write →</Link>
+              </div>
+            )}
+          </div>
+
+          {/* AI placeholder */}
+          <div style={{ padding: '14px 18px', borderRadius: 8, background: 'var(--ai-dim)', border: '1px solid rgba(139,92,246,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+              <Sparkles size={12} style={{ color: 'var(--ai-accent)' }} />
+              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>AI Day Summary</p>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--ai-accent)', opacity: 0.7 }}>AI summaries will appear here once enabled.</p>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -227,6 +363,14 @@ export default function DashboardPage() {
   const [goalInput, setGoalInput]         = useState('')
   const [accountInput, setAccountInput]   = useState('')
   const [dailyLimit, setDailyLimit]       = useState<number | null>(null)
+  const [selectedDay, setSelectedDay]     = useState<string | null>(null)
+  const [dayEntry, setDayEntry]           = useState<any>(null)
+
+  useEffect(() => {
+    if (!selectedDay) return
+    supabase.from('journal_entries').select('mood, content, went_well, went_wrong, biggest_lesson, focus_tomorrow').eq('entry_date', selectedDay).maybeSingle()
+      .then(({ data }) => setDayEntry(data ?? null))
+  }, [selectedDay])
 
   useEffect(() => {
     const g = localStorage.getItem('weeklyGoal')
@@ -448,7 +592,7 @@ export default function DashboardPage() {
           <div>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>P&L calendar</p>
             <div className="card" style={{ padding: '18px 20px' }}>
-              <PnLCalendar trades={trades} />
+              <PnLCalendar trades={trades} onDayClick={date => { setSelectedDay(date); setDayEntry(null) }} />
             </div>
           </div>
 
@@ -589,6 +733,15 @@ export default function DashboardPage() {
 
         </div>
       </div>
+
+      {selectedDay && (
+        <DayPanel
+          date={selectedDay}
+          trades={trades.filter(t => (t.trade_date || t.created_at?.split('T')[0]) === selectedDay)}
+          entry={dayEntry}
+          onClose={() => setSelectedDay(null)}
+        />
+      )}
     </div>
   )
 }

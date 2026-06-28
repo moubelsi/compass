@@ -49,6 +49,8 @@ export default function TradesPage() {
   const [result, setResult]       = useState<'All' | 'Win' | 'Loss'>('All')
   const [starred, setStarred]     = useState(false)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [sortKey, setSortKey]     = useState<'date' | 'return_pct' | 'pnl' | null>(null)
+  const [sortDir, setSortDir]     = useState<'asc' | 'desc'>('desc')
   const [dailyLimit, setDailyLimit] = useState<number | null>(null)
   const [editingLimit, setEditingLimit] = useState(false)
   const [limitInput, setLimitInput]     = useState('')
@@ -99,15 +101,29 @@ export default function TradesPage() {
   const limitColor    = limitExceeded ? 'var(--loss)' : limitAtLimit ? '#B45309' : 'var(--text-secondary)'
 
   const allTags  = Array.from(new Set(trades.flatMap(t => t.tags || []))).sort()
-  const filtered = trades.filter(t => {
-    if (search && !t.symbol?.toLowerCase().includes(search.toLowerCase()) && !t.strategy?.toLowerCase().includes(search.toLowerCase())) return false
-    if (direction !== 'All' && t.direction !== direction) return false
-    if (result === 'Win' && Number(t.pnl) <= 0) return false
-    if (result === 'Loss' && Number(t.pnl) >= 0) return false
-    if (starred && !t.is_favourite) return false
-    if (tagFilter && !(t.tags || []).includes(tagFilter)) return false
-    return true
-  })
+  const filtered = trades
+    .filter(t => {
+      if (search && !t.symbol?.toLowerCase().includes(search.toLowerCase()) && !t.strategy?.toLowerCase().includes(search.toLowerCase())) return false
+      if (direction !== 'All' && t.direction !== direction) return false
+      if (result === 'Win' && Number(t.pnl) <= 0) return false
+      if (result === 'Loss' && Number(t.pnl) >= 0) return false
+      if (starred && !t.is_favourite) return false
+      if (tagFilter && !(t.tags || []).includes(tagFilter)) return false
+      return true
+    })
+    .sort((a, b) => {
+      if (!sortKey) return 0
+      let aVal: number, bVal: number
+      if (sortKey === 'date')       { aVal = new Date(a.trade_date || a.created_at).getTime(); bVal = new Date(b.trade_date || b.created_at).getTime() }
+      else if (sortKey === 'pnl')   { aVal = Number(a.pnl); bVal = Number(b.pnl) }
+      else                          { aVal = Number(a.return_pct ?? 0); bVal = Number(b.return_pct ?? 0) }
+      return sortDir === 'asc' ? aVal - bVal : bVal - aVal
+    })
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
 
   const dateLabel = (t: Trade) => {
     const raw = t.trade_date || t.created_at
@@ -247,9 +263,18 @@ export default function TradesPage() {
           <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
             <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '12px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', alignItems: 'center' }}>
               <Star size={11} style={{ color: 'var(--border-default)' }} />
-              {['Symbol', 'Strategy', 'Date', 'Return', 'P&L', 'R:R'].map(h => (
-                <p key={h} style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em', textAlign: h === 'Symbol' || h === 'Strategy' ? 'left' : 'right' }}>{h}</p>
-              ))}
+              {(['Symbol', 'Strategy', 'Date', 'Return', 'P&L', 'R:R'] as const).map(h => {
+                const key = h === 'Date' ? 'date' : h === 'Return' ? 'return_pct' : h === 'P&L' ? 'pnl' : null
+                const active = key && sortKey === key
+                const arrow = active ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''
+                return key ? (
+                  <button key={h} onClick={() => toggleSort(key)} style={{ fontSize: 11, fontWeight: active ? 600 : 500, color: active ? 'var(--text-primary)' : 'var(--text-muted)', letterSpacing: '0.04em', textAlign: 'right', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'block', width: '100%' }}>
+                    {h}{arrow}
+                  </button>
+                ) : (
+                  <p key={h} style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.04em', textAlign: h === 'Symbol' || h === 'Strategy' ? 'left' : 'right' }}>{h}</p>
+                )
+              })}
             </div>
 
             {filtered.length === 0 ? (

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
@@ -144,7 +145,10 @@ const EMPTY_FORM = { content: '', wentWell: '', wentWrong: '', biggestLesson: ''
 
 export default function JournalPage() {
   const { symbol }                      = useCurrency()
-  const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
+  const searchParams                    = useSearchParams()
+  const paramDate                       = searchParams.get('date')
+  const initDate                        = paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate) ? paramDate : toDateStr(new Date())
+  const [selectedDate, setSelectedDate] = useState(initDate)
   const [form, setForm]                 = useState(EMPTY_FORM)
   const [savedForm, setSavedForm]       = useState(EMPTY_FORM)
   const [mood, setMood]                 = useState<number | null>(null)
