@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Search, SlidersHorizontal, Upload, Star, Zap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 type Direction = 'LONG' | 'SHORT'
 
@@ -42,6 +44,7 @@ function MetricCard({ label, value, sub, color }: { label: string; value: string
 }
 
 export default function TradesPage() {
+  const { symbol }                = useCurrency()
   const [trades, setTrades]       = useState<Trade[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -147,7 +150,7 @@ export default function TradesPage() {
                   <span style={{ color: 'var(--profit)' }}>{wins.length}W</span>
                   <span style={{ color: 'var(--loss)' }}>{losses.length}L</span>
                   <span style={{ color: totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                    {totalPnl >= 0 ? '+' : ''}${Math.abs(totalPnl).toFixed(2)}
+                    {formatCurrency(totalPnl, true, symbol)}
                   </span>
                 </div>
               )}
@@ -199,17 +202,17 @@ export default function TradesPage() {
               />
               <MetricCard
                 label="Avg win"
-                value={avgWin > 0 ? `+$${avgWin.toFixed(2)}` : '—'}
+                value={avgWin > 0 ? formatCurrency(avgWin, true, symbol) : '—'}
                 color={avgWin > 0 ? 'var(--profit)' : undefined}
               />
               <MetricCard
                 label="Avg loss"
-                value={avgLoss > 0 ? `-$${avgLoss.toFixed(2)}` : '—'}
+                value={avgLoss > 0 ? `-${symbol}${avgLoss.toFixed(2)}` : '—'}
                 color={avgLoss > 0 ? 'var(--loss)' : undefined}
               />
               <MetricCard
                 label="Expectancy"
-                value={expectancy !== null ? `${expectancy >= 0 ? '+' : ''}$${expectancy.toFixed(2)}` : '—'}
+                value={expectancy !== null ? formatCurrency(expectancy, true, symbol) : '—'}
                 color={expectancy !== null ? (expectancy >= 0 ? 'var(--profit)' : 'var(--loss)') : undefined}
                 sub="Per trade avg"
               />
@@ -348,7 +351,7 @@ export default function TradesPage() {
                     {/* P&L */}
                     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <span style={{ fontSize: 13, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
-                        {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
+                        {formatCurrency(Number(t.pnl), true, symbol)}
                       </span>
                     </div>
 

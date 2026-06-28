@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { ArrowLeft, Upload, CheckCircle, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 interface ParsedTrade {
   symbol: string
@@ -236,6 +238,7 @@ const INSTRUCTIONS: Record<Source, { title: string; steps: string[] }> = {
 }
 
 export default function ImportPage() {
+  const { symbol } = useCurrency()
   const [source, setSource]     = useState<Source>('ctrader')
   const [step, setStep]         = useState<'upload' | 'preview' | 'importing'>('upload')
   const [trades, setTrades]     = useState<ParsedTrade[]>([])
@@ -390,7 +393,7 @@ export default function ImportPage() {
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{t.entry_price}</span>
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>{t.exit_price}</span>
                   <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: t.pnl == null ? 'var(--text-muted)' : t.pnl >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
-                    {t.pnl == null ? '—' : `${t.pnl >= 0 ? '+' : '-'}$${Math.abs(t.pnl).toFixed(2)}`}
+                    {t.pnl == null ? '—' : formatCurrency(t.pnl, true, symbol)}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: t.return_pct == null ? 'var(--text-muted)' : t.return_pct >= 0 ? 'var(--profit)' : 'var(--loss)' }}>
                     {t.return_pct == null ? '—' : `${t.return_pct >= 0 ? '+' : ''}${t.return_pct.toFixed(3)}%`}

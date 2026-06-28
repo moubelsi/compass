@@ -5,10 +5,13 @@ import Link from 'next/link'
 import { ChevronRight, ChevronLeft, Plus, Target, Zap, X, Sparkles } from 'lucide-react'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 // ─── P&L Calendar ────────────────────────────────────────────────────────────
 
 function PnLCalendar({ trades, onDayClick }: { trades: any[]; onDayClick: (date: string) => void }) {
+  const { symbol } = useCurrency()
   const today = new Date()
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
 
@@ -100,14 +103,14 @@ function PnLCalendar({ trades, onDayClick }: { trades: any[]; onDayClick: (date:
               return (
                 <button key={cell.date}
                   onClick={() => !isFuture && onDayClick(cell.date)}
-                  title={data ? `${data.pnl >= 0 ? '+' : ''}$${data.pnl.toFixed(2)} · ${data.count}t` : cell.date}
+                  title={data ? `${data.pnl >= 0 ? '+' : ''}${symbol}${data.pnl.toFixed(2)} · ${data.count}t` : cell.date}
                   style={{ borderRadius: 4, padding: '5px 2px 4px', textAlign: 'center', background: bg, border: isToday ? '1.5px solid var(--accent)' : '1px solid transparent', opacity: isFuture ? 0.2 : 1, minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 1, cursor: isFuture ? 'default' : 'pointer', transition: 'filter 0.1s' }}
                   onMouseEnter={e => { if (!isFuture) (e.currentTarget as HTMLElement).style.filter = 'brightness(1.15)' }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.filter = '' }}>
                   <span style={{ fontSize: 9.5, fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent)' : data ? 'var(--text-secondary)' : 'var(--text-disabled)', lineHeight: 1 }}>{cell.n}</span>
                   {data && (
                     <span style={{ fontSize: 8, fontWeight: 600, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginTop: 1 }}>
-                      {data.pnl >= 0 ? '+' : ''}${Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : data.pnl.toFixed(0)}
+                      {data.pnl >= 0 ? '+' : ''}{symbol}{Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : data.pnl.toFixed(0)}
                     </span>
                   )}
                 </button>
@@ -118,7 +121,7 @@ function PnLCalendar({ trades, onDayClick }: { trades: any[]; onDayClick: (date:
               {wTrades > 0 && (
                 <>
                   <span style={{ fontSize: 8, fontWeight: 700, color: wPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                    {wPnl >= 0 ? '+' : ''}${Math.abs(wPnl) >= 1000 ? (wPnl / 1000).toFixed(1) + 'k' : Math.abs(wPnl).toFixed(0)}
+                    {wPnl >= 0 ? '+' : ''}{symbol}{Math.abs(wPnl) >= 1000 ? (wPnl / 1000).toFixed(1) + 'k' : Math.abs(wPnl).toFixed(0)}
                   </span>
                   <span style={{ fontSize: 7.5, color: 'var(--text-disabled)', lineHeight: 1, marginTop: 2 }}>{wTrades}t</span>
                 </>
@@ -139,6 +142,7 @@ function DayPanel({ date, trades, entry, onClose }: {
   entry: { mood: string | null; content: string | null; went_well: string | null; went_wrong: string | null; biggest_lesson: string | null; focus_tomorrow: string | null } | null
   onClose: () => void
 }) {
+  const { symbol } = useCurrency()
   const pnl     = trades.reduce((s, t) => s + Number(t.pnl || 0), 0)
   const ret     = trades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
   const wins    = trades.filter(t => Number(t.pnl) > 0)
@@ -171,7 +175,7 @@ function DayPanel({ date, trades, entry, onClose }: {
           {trades.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {[
-                { label: 'P&L',    value: `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`,       color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'P&L',    value: formatCurrency(pnl, true, symbol),       color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
                 { label: 'Return', value: `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%`,                  color: ret >= 0 ? 'var(--profit)' : 'var(--loss)' },
                 { label: 'Trades', value: String(trades.length),                                        color: 'var(--text-primary)' },
                 { label: 'Win %',  value: `${winRate}%`,                                                color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
@@ -208,7 +212,7 @@ function DayPanel({ date, trades, entry, onClose }: {
                         {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
                       </span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', minWidth: 68, textAlign: 'right' }}>
-                        {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
+                        {formatCurrency(Number(t.pnl), true, symbol)}
                       </span>
                     </Link>
                   )
@@ -353,6 +357,7 @@ type Period = '1W' | '1M' | '3M' | '6M' | '1Y' | 'All'
 const PERIODS: Period[] = ['1W', '1M', '3M', '6M', '1Y', 'All']
 
 export default function DashboardPage() {
+  const { symbol }                        = useCurrency()
   const [trades, setTrades]               = useState<any[]>([])
   const [loading, setLoading]             = useState(true)
   const [period, setPeriod]               = useState<Period>('All')
@@ -511,7 +516,7 @@ export default function DashboardPage() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                 {[
-                  { label: 'P&L',           value: `${totalPnl >= 0 ? '+' : ''}$${Math.abs(totalPnl).toFixed(2)}`,  color: isUp ? 'var(--profit)' : 'var(--loss)' },
+                  { label: 'P&L',           value: formatCurrency(totalPnl, true, symbol),  color: isUp ? 'var(--profit)' : 'var(--loss)' },
                   { label: 'Win rate',       value: `${winRate.toFixed(1)}%`,     color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
                   { label: 'Trades',         value: String(totalTrades),          color: 'var(--text-primary)' },
                   { label: 'Profit factor',  value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
@@ -545,7 +550,7 @@ export default function DashboardPage() {
         {todayTrades.length > 0 && (
           <div style={{ display: 'flex', gap: 10 }}>
             {[
-              { label: 'Today P&L',   value: `${todayPnl >= 0 ? '+' : ''}$${Math.abs(todayPnl).toFixed(2)}`,  color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+              { label: 'Today P&L',   value: formatCurrency(todayPnl, true, symbol),  color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
               { label: 'Win rate',    value: `${todayWinPct}%`, color: todayWinPct >= 50 ? 'var(--profit)' : 'var(--loss)' },
               { label: 'Return',      value: `${todayReturn >= 0 ? '+' : ''}${todayReturn.toFixed(2)}%`, color: todayReturn >= 0 ? 'var(--profit)' : 'var(--loss)' },
               { label: 'Trades',      value: dailyLimit ? `${todayTrades.length} / ${dailyLimit}` : String(todayTrades.length), color: dailyLimit && todayTrades.length > dailyLimit ? 'var(--loss)' : 'var(--text-primary)' },
@@ -631,7 +636,7 @@ export default function DashboardPage() {
                       {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
                     </span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right', minWidth: 72 }}>
-                      {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
+                      {formatCurrency(Number(t.pnl), true, symbol)}
                     </span>
                   </Link>
                 )
@@ -690,7 +695,7 @@ export default function DashboardPage() {
               <>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
                   <span style={{ fontSize: 32, fontWeight: 700, color: weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                    {weekPnl >= 0 ? '+' : '-'}${Math.abs(weekPnl).toFixed(2)}
+                    {formatCurrency(weekPnl, true, symbol)}
                   </span>
                   {weekReturn !== 0 && (
                     <span style={{ fontSize: 13, fontWeight: 500, color: weekReturn >= 0 ? 'var(--profit)' : 'var(--loss)', opacity: 0.8 }}>
@@ -705,7 +710,7 @@ export default function DashboardPage() {
                       <div style={{ height: '100%', width: `${goalProgress}%`, borderRadius: 2, background: goalProgress >= 100 ? 'var(--profit)' : 'var(--accent)', transition: 'width 0.5s ease' }} />
                     </div>
                     <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      ${weekPnl.toFixed(2)} of ${goalDollar.toFixed(2)}{weeklyGoalMode === 'percent' && weeklyGoal ? ` (${weeklyGoal}% goal)` : ''} &nbsp;·&nbsp;
+                      {symbol}{weekPnl.toFixed(2)} of {symbol}{goalDollar.toFixed(2)}{weeklyGoalMode === 'percent' && weeklyGoal ? ` (${weeklyGoal}% goal)` : ''} &nbsp;·&nbsp;
                       <span style={{ fontWeight: 600, color: goalProgress >= 100 ? 'var(--profit)' : 'var(--text-secondary)' }}>{goalProgress.toFixed(0)}%</span>
                     </p>
                   </>

@@ -6,6 +6,8 @@ import { ArrowLeft, Check, ChevronDown, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 import { TagInput } from '@/components/ui/TagInput'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
@@ -57,6 +59,7 @@ function ConfidenceSlider({ value, onChange }: { value: number; onChange: (v: nu
 
 export default function EditTradePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { symbol } = useCurrency()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -218,7 +221,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
             <div>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Estimated P&L</p>
               <p style={{ fontSize: 36, fontWeight: 700, color: pnlUp ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>
-                {pnlUp ? '+' : ''}${Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {formatCurrency(pnl, true, symbol)}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 40, textAlign: 'right' }}>

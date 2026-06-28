@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useCurrency } from '@/lib/useCurrency'
 
 const ASSET_TYPES = [
   { label: 'Forex',     multiplier: 100000, unit: 'lots',      pip: 0.0001 },
@@ -10,6 +11,7 @@ const ASSET_TYPES = [
 ]
 
 export default function ToolsPage() {
+  const { symbol } = useCurrency()
   const [assetType, setAssetType] = useState('Indices')
   const [accountSize, setAccountSize]   = useState('')
   const [riskPct, setRiskPct]           = useState('1')
@@ -82,7 +84,7 @@ export default function ToolsPage() {
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
               {[
-                { label: 'Risk amount', value: riskAmount != null ? `$${riskAmount.toFixed(2)}` : '—', color: riskAmount != null ? 'var(--loss)' : undefined },
+                { label: 'Risk amount', value: riskAmount != null ? `${symbol}${riskAmount.toFixed(2)}` : '—', color: riskAmount != null ? 'var(--loss)' : undefined },
                 { label: 'Distance', value: distance != null ? distance.toFixed(distance < 1 ? 5 : 2) : '—', color: undefined },
                 { label: `Size (${asset.unit})`, value: lotSize != null ? lotSize.toFixed(2) : '—', color: lotSize != null ? 'var(--accent)' : undefined },
               ].map(({ label, value, color }) => (

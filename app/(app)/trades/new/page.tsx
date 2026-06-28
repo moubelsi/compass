@@ -6,6 +6,8 @@ import { ArrowLeft, Check, ChevronDown, ImagePlus, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { TagInput } from '@/components/ui/TagInput'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
 
@@ -50,6 +52,7 @@ function Stars({ value, onChange }: { value: number; onChange: (v: number) => vo
 }
 
 export default function NewTradePage() {
+  const { symbol } = useCurrency()
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -179,7 +182,7 @@ export default function NewTradePage() {
             <div>
               <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 4 }}>Estimated P&L</p>
               <p style={{ fontSize: 32, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: pnlUp ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.03em' }}>
-                {pnlUp ? '+' : ''}${Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {formatCurrency(pnl, true, symbol)}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 32, textAlign: 'right' }}>

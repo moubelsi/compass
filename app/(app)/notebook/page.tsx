@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, X, BookOpen, TrendingUp, AlertCircle, Brain, Lightbulb, LineChart, FlaskConical, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,7 @@ const KNOWLEDGE_PAGES = [
 // ─── Slide-over panel ─────────────────────────────────────────────────────────
 
 function DaySlideOver({ date, data, onClose }: { date: string; data: DayData; onClose: () => void }) {
+  const { symbol } = useCurrency()
   const { pnl, trades, entry } = data
   const wins    = trades.filter(t => Number(t.pnl) > 0)
   const losses  = trades.filter(t => Number(t.pnl) < 0)
@@ -109,7 +112,7 @@ function DaySlideOver({ date, data, onClose }: { date: string; data: DayData; on
           {trades.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {[
-                { label: 'P&L',     value: `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(2)}`, color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'P&L',     value: formatCurrency(pnl, true, symbol), color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
                 { label: 'Return',  value: `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%`,             color: ret >= 0 ? 'var(--profit)' : 'var(--loss)' },
                 { label: 'Trades',  value: String(trades.length),                                  color: 'var(--text-primary)' },
                 { label: 'Win %',   value: `${winRate}%`,                                          color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
@@ -146,7 +149,7 @@ function DaySlideOver({ date, data, onClose }: { date: string; data: DayData; on
                         {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
                       </span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', minWidth: 68, textAlign: 'right' }}>
-                        {up ? '+' : '-'}${Math.abs(Number(t.pnl)).toFixed(2)}
+                        {formatCurrency(Number(t.pnl), true, symbol)}
                       </span>
                     </Link>
                   )
@@ -288,6 +291,7 @@ function KnowledgeEditor({ page, onClose, onSaved }: { page: typeof KNOWLEDGE_PA
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function NotebookPage() {
+  const { symbol } = useCurrency()
   const today    = new Date()
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [trades, setTrades]     = useState<Trade[]>([])
@@ -414,7 +418,7 @@ export default function NotebookPage() {
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>Month P&L</p>
                   <p style={{ fontSize: 20, fontWeight: 600, color: monthPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em' }}>
-                    {monthPnl >= 0 ? '+' : ''}${Math.abs(monthPnl).toFixed(2)}
+                    {formatCurrency(monthPnl, true, symbol)}
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -487,7 +491,7 @@ export default function NotebookPage() {
                       {data && hasTrades && (
                         <>
                           <span style={{ fontSize: 10, fontWeight: 700, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                            {data.pnl >= 0 ? '+' : ''}${Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : Math.abs(data.pnl).toFixed(0)}
+                            {data.pnl >= 0 ? '+' : ''}{symbol}{Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : Math.abs(data.pnl).toFixed(0)}
                           </span>
                           <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1 }}>{data.trades.length}t</span>
                         </>
@@ -506,7 +510,7 @@ export default function NotebookPage() {
                   {week.trades > 0 ? (
                     <>
                       <span style={{ fontSize: 11, fontWeight: 700, color: week.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                        {week.pnl >= 0 ? '+' : ''}${Math.abs(week.pnl) >= 1000 ? (week.pnl / 1000).toFixed(1) + 'k' : Math.abs(week.pnl).toFixed(0)}
+                        {week.pnl >= 0 ? '+' : ''}{symbol}{Math.abs(week.pnl) >= 1000 ? (week.pnl / 1000).toFixed(1) + 'k' : Math.abs(week.pnl).toFixed(0)}
                       </span>
                       <span style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{week.trades}t</span>
                     </>

@@ -6,6 +6,8 @@ import { ArrowLeft, Edit3, Trash2, ImageIcon, FileText, BarChart2, Star, Activit
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -18,6 +20,7 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
 
 export default function TradeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const { symbol } = useCurrency()
   const [trade, setTrade] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
@@ -128,7 +131,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
           <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', borderLeft: `4px solid ${up ? 'var(--profit)' : 'var(--loss)'}` }}>
             <p className="label" style={{ marginBottom: 8 }}>Total P&L</p>
             <p style={{ fontSize: 48, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums', marginBottom: 16 }}>
-              {up ? '+' : ''}${Math.abs(Number(trade.pnl)).toFixed(2)}
+              {formatCurrency(Number(trade.pnl), true, symbol)}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
               {returnPct != null && (
