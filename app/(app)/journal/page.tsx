@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
@@ -335,7 +335,7 @@ function MiniCalendar({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function JournalPage() {
+function JournalPageInner() {
   const { symbol }       = useCurrency()
   const searchParams     = useSearchParams()
   const paramDate        = searchParams.get('date')
@@ -838,4 +838,8 @@ export default function JournalPage() {
       </div>
     </div>
   )
+}
+
+export default function JournalPage() {
+  return <Suspense fallback={null}><JournalPageInner /></Suspense>
 }
