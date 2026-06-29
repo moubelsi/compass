@@ -1,3 +1,8 @@
+/** Returns 'YYYY-MM-DD' in the user's LOCAL timezone — never use toISOString() for dates */
+export function localDateStr(d: Date = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function formatCurrency(v: number, sign = false, symbol = '$') {
   const f = `${symbol}${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
   return sign ? (v >= 0 ? `+${f}` : `-${f}`) : f

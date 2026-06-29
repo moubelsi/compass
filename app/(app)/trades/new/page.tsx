@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { TagInput } from '@/components/ui/TagInput'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, localDateStr } from '@/lib/utils'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
 
@@ -62,7 +62,7 @@ export default function NewTradePage() {
     entry: '', exit: '', sl: '', tp: '', size: '',
     strategy: '', score: 0, followed_plan: true,
     trade_type: '', confidence: 0,
-    notes: '', date: new Date().toISOString().split('T')[0], rr: '',
+    notes: '', date: localDateStr(), rr: '',
     tags: [],
   })
 

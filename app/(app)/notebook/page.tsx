@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, X, BookOpen, TrendingUp, AlertCircle, Brain,
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, localDateStr } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -304,8 +304,8 @@ export default function NotebookPage() {
   const year  = viewDate.getFullYear()
   const month = viewDate.getMonth()
 
-  const monthStart = new Date(year, month, 1).toISOString().split('T')[0]
-  const monthEnd   = new Date(year, month + 1, 0).toISOString().split('T')[0]
+  const monthStart = localDateStr(new Date(year, month, 1))
+  const monthEnd   = localDateStr(new Date(year, month + 1, 0))
 
   useEffect(() => {
     async function load() {
@@ -349,7 +349,7 @@ export default function NotebookPage() {
   // Calendar cells
   const daysInMonth: { date: string; n: number }[] = []
   for (let d = new Date(year, month, 1); d.getMonth() === month; d.setDate(d.getDate() + 1))
-    daysInMonth.push({ date: d.toISOString().split('T')[0], n: d.getDate() })
+    daysInMonth.push({ date: localDateStr(d), n: d.getDate() })
 
   const firstDow = new Date(year, month, 1).getDay()
   const offset   = firstDow === 0 ? 6 : firstDow - 1
@@ -360,7 +360,7 @@ export default function NotebookPage() {
     ...Array(totalCells - offset - daysInMonth.length).fill(null),
   ]
 
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = localDateStr(today)
   const canNext  = new Date(year, month + 1, 1) <= today
 
   // Weekly totals
