@@ -25,6 +25,7 @@ interface Trade {
   screenshot_url: string | null
   is_favourite: boolean
   tags: string[]
+  setup_score: number | null
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -91,6 +92,18 @@ export default function TradesPage() {
     const l = localStorage.getItem('dailyTradeLimit')
     if (l) setDailyLimit(parseInt(l))
 
+    const saved = localStorage.getItem('tradesFilters')
+    if (saved) {
+      try {
+        const f = JSON.parse(saved)
+        if (f.direction) setDirection(f.direction)
+        if (f.result)    setResult(f.result)
+        if (f.starred)   setStarred(f.starred)
+        if (f.sortKey)   setSortKey(f.sortKey)
+        if (f.sortDir)   setSortDir(f.sortDir)
+      } catch {}
+    }
+
     supabase.from('trades')
       .select('*')
       .order('trade_date', { ascending: false, nullsFirst: false })
@@ -100,6 +113,10 @@ export default function TradesPage() {
         setLoading(false)
       })
   }, [])
+
+  useEffect(() => {
+    localStorage.setItem('tradesFilters', JSON.stringify({ direction, result, starred, sortKey, sortDir }))
+  }, [direction, result, starred, sortKey, sortDir])
 
   function saveLimit() {
     const n = parseInt(limitInput)
@@ -339,6 +356,14 @@ export default function TradesPage() {
                             <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
                             {t.trade_type && <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 5px', borderRadius: 3, background: 'var(--bg-elevated)', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{t.trade_type}</span>}
                           </div>
+                          {t.setup_score != null && (
+                            <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+                              {[1,2,3,4,5,6,7,8,9,10].map(i => (
+                                <span key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i <= t.setup_score! ? '#B45309' : 'var(--border-subtle)', display: 'inline-block', flexShrink: 0 }} />
+                              ))}
+                              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 3 }}>{t.setup_score}/10</span>
+                            </div>
+                          )}
                           {tags.length > 0 && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                               {tags.map(tag => (

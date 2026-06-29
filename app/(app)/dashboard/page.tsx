@@ -239,6 +239,7 @@ function DayPanel({ date, trades, entry, onClose }: {
                   { label: 'Went well',      value: entry.went_well },
                   { label: 'Went wrong',     value: entry.went_wrong },
                   { label: 'Biggest lesson', value: entry.biggest_lesson },
+                  { label: 'Focus tomorrow', value: entry.focus_tomorrow },
                 ].filter(f => f.value).map(f => (
                   <div key={f.label} style={{ padding: '10px 14px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                     <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{f.label}</p>
@@ -521,6 +522,7 @@ export default function DashboardPage() {
                   { label: 'Trades',         value: String(totalTrades),          color: 'var(--text-primary)' },
                   { label: 'Profit factor',  value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
                   { label: 'Streak',         value: currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'}` : '—', color: currentStreak > 0 ? (streakIsWin ? 'var(--profit)' : 'var(--loss)') : 'var(--text-primary)' },
+                  { label: 'Followed plan',  value: totalTrades > 0 ? `${Math.round(followedPct * 100)}%` : '—', color: followedPct >= 0.8 ? 'var(--profit)' : followedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)' },
                   { label: 'Discipline',     value: disciplineScore !== null ? String(disciplineScore) : '—', color: discColor },
                 ].map((s, i, arr) => (
                   <div key={s.label} style={{ display: 'flex', alignItems: 'center' }}>

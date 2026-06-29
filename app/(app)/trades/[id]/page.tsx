@@ -63,11 +63,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
   if (!trade) return <div style={{ padding: 40, color: 'var(--text-muted)', fontSize: 14 }}>Trade not found</div>
 
   const up = Number(trade.pnl) >= 0
-  const returnPct = trade.return_pct != null
-    ? Number(trade.return_pct)
-    : trade.entry_price && trade.pnl
-      ? (Number(trade.pnl) / Number(trade.entry_price)) * 100
-      : null
+  const returnPct = trade.return_pct != null ? Number(trade.return_pct) : null
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>

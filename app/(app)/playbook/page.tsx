@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, BookMarked } from 'lucide-react'
+import { Plus, BookMarked, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface Setup {
@@ -17,11 +17,17 @@ interface Setup {
 export default function PlaybookPage() {
   const [setups, setSetups] = useState<Setup[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     supabase.from('setups').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setSetups(data || []); setLoading(false) })
   }, [])
+
+  const q = search.toLowerCase()
+  const filteredSetups = search
+    ? setups.filter(s => s.name.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q) || (s.tags || []).some(t => t.toLowerCase().includes(q)))
+    : setups
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
@@ -31,9 +37,21 @@ export default function PlaybookPage() {
             <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Playbook</h1>
             <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{setups.length} setup{setups.length !== 1 ? 's' : ''} · your documented edge</p>
           </div>
-          <Link href="/playbook/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
-            <Plus size={14} />New setup
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+              <input
+                className="input"
+                placeholder="Search setups…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: 32, width: 200, fontSize: 13 }}
+              />
+            </div>
+            <Link href="/playbook/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
+              <Plus size={14} />New setup
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -51,9 +69,15 @@ export default function PlaybookPage() {
             </p>
             <Link href="/playbook/new" className="btn-primary" style={{ fontSize: 14 }}>Create your first setup</Link>
           </div>
+        ) : filteredSetups.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+            <Search size={24} style={{ color: 'var(--text-muted)', margin: '0 auto 16px', display: 'block' }} />
+            <p style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>No setups match "{search}"</p>
+            <button type="button" onClick={() => setSearch('')} style={{ fontSize: 13, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Clear search</button>
+          </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 20 }}>
-            {setups.map(setup => (
+            {filteredSetups.map(setup => (
               <Link key={setup.id} href={`/playbook/${setup.id}`} style={{ textDecoration: 'none' }}>
                 <div className="card" style={{ padding: '22px 24px', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s', height: '100%' }}
                   onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}

@@ -64,6 +64,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [origReturnPct, setOrigReturnPct] = useState<number | null>(null)
+  const [origRR, setOrigRR] = useState<number | null>(null)
   const [existingScreenshot, setExistingScreenshot] = useState<string | null>(null)
   const [newScreenshot, setNewScreenshot] = useState<File | null>(null)
   const [removeScreenshot, setRemoveScreenshot] = useState(false)
@@ -106,6 +108,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         })
         const url = data.screenshot_url
         if (url && url !== 'EMPTY') setExistingScreenshot(url)
+        setOrigReturnPct(data.return_pct ?? null)
+        setOrigRR(data.rr ?? null)
       }
       setLoading(false)
     }
@@ -173,8 +177,8 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
         tags: f.tags,
         is_favourite: f.is_favourite,
         screenshot_url: screenshotUrl,
-        return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : null,
-        rr: rrValue,
+        return_pct: returnPct !== null ? parseFloat(returnPct.toFixed(2)) : origReturnPct,
+        rr: rrValue !== null ? rrValue : origRR,
         trade_date: f.date || null,
       }
       let { error: updateError } = await supabase.from('trades').update(basePayload).eq('id', id)
