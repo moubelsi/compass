@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, X, BookOpen, TrendingUp, AlertCircle, Brain, Lightbulb, LineChart, FlaskConical, Sparkles } from 'lucide-react'
-import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
@@ -10,579 +9,685 @@ import { formatCurrency, localDateStr } from '@/lib/utils'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Trade {
-  id: string
-  symbol: string
-  direction: 'LONG' | 'SHORT'
-  strategy: string | null
-  pnl: number
-  return_pct: number | null
-  trade_date: string | null
-  created_at: string
-}
-
-interface JournalEntry {
-  entry_date: string
-  content: string | null
-  went_well: string | null
-  went_wrong: string | null
-  biggest_lesson: string | null
-  focus_tomorrow: string | null
-  mood: string | null
+  id: string; symbol: string; direction: 'LONG' | 'SHORT'
+  pnl: number; return_pct: number | null; rr: number | null
+  trade_date: string | null; created_at: string
 }
 
 interface NotebookPage {
-  id: string
-  slug: string
-  title: string
-  content: string | null
-  updated_at: string
+  id: string; slug: string; title: string; content: string | null; updated_at: string
 }
 
-interface DayData {
-  pnl: number
-  trades: Trade[]
-  entry: JournalEntry | null
+interface WeekInfo {
+  year: number; week: number; slug: string; start: string; end: string; label: string
 }
 
-// ─── Knowledge page config ────────────────────────────────────────────────────
+interface MonthInfo {
+  year: number; month: number; slug: string; label: string; start: string; end: string
+}
 
-const KNOWLEDGE_PAGES = [
-  { slug: 'mistakes',     title: 'Trading Mistakes',     icon: AlertCircle,  color: 'var(--loss)',     dim: 'var(--loss-dim)' },
-  { slug: 'lessons',      title: 'Lessons Learned',      icon: Lightbulb,    color: '#B45309',         dim: 'rgba(180,83,9,0.1)' },
-  { slug: 'psychology',   title: 'Psychology',           icon: Brain,        color: 'var(--ai-accent)',dim: 'var(--ai-dim)' },
-  { slug: 'observations', title: 'Market Observations',  icon: LineChart,    color: 'var(--profit)',   dim: 'var(--profit-dim)' },
-  { slug: 'strategy',     title: 'Strategy Notes',       icon: BookOpen,     color: 'var(--accent)',   dim: 'rgba(100,116,139,0.1)' },
-  { slug: 'ideas',        title: 'Ideas',                icon: FlaskConical, color: 'var(--text-secondary)', dim: 'var(--bg-elevated)' },
+// ─── Folder config ────────────────────────────────────────────────────────────
+
+const KB_FOLDERS = [
+  { id: 'mistakes',     label: 'Trading Mistakes',    slug: 'mistakes' },
+  { id: 'lessons',      label: 'Lessons Learned',     slug: 'lessons' },
+  { id: 'psychology',   label: 'Psychology',          slug: 'psychology' },
+  { id: 'observations', label: 'Market Observations', slug: 'observations' },
+  { id: 'strategy',     label: 'Strategy Notes',      slug: 'strategy' },
+  { id: 'ideas',        label: 'Ideas',               slug: 'ideas' },
 ] as const
 
-// ─── Slide-over panel ─────────────────────────────────────────────────────────
+const PLANNING_FOLDERS = [
+  { id: 'weekly-focus',  label: 'Weekly Focus',  slug: 'planning-weekly-focus' },
+  { id: 'trading-goals', label: 'Trading Goals', slug: 'planning-trading-goals' },
+] as const
 
-function DaySlideOver({ date, data, onClose }: { date: string; data: DayData; onClose: () => void }) {
-  const { symbol } = useCurrency()
-  const { pnl, trades, entry } = data
-  const wins    = trades.filter(t => Number(t.pnl) > 0)
-  const losses  = trades.filter(t => Number(t.pnl) < 0)
-  const winRate = trades.length > 0 ? Math.round(wins.length / trades.length * 100) : 0
-  const ret     = trades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
+// ─── Week / month helpers ─────────────────────────────────────────────────────
 
-  const d = new Date(date + 'T12:00:00')
-  const label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-
-  const panelRef = useRef<HTMLDivElement>(null)
-
-  // Close on Escape
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 50, backdropFilter: 'blur(2px)' }} />
-
-      {/* Panel */}
-      <div ref={panelRef} style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 51,
-        width: 480, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-default)',
-        display: 'flex', flexDirection: 'column', overflowY: 'auto',
-        boxShadow: '-16px 0 40px rgba(0,0,0,0.12)',
-      }}>
-        {/* Header */}
-        <div style={{ padding: '20px 24px 0', flexShrink: 0, position: 'sticky', top: 0, background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: 16, zIndex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
-                {d.toLocaleDateString('en-US', { weekday: 'long' })}
-              </p>
-              <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em' }}>
-                {d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-              </h2>
-            </div>
-            <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)' }}>
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-          {/* Stats row */}
-          {trades.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {[
-                { label: 'P&L',     value: formatCurrency(pnl, true, symbol), color: pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
-                { label: 'Return',  value: `${ret >= 0 ? '+' : ''}${ret.toFixed(2)}%`,             color: ret >= 0 ? 'var(--profit)' : 'var(--loss)' },
-                { label: 'Trades',  value: String(trades.length),                                  color: 'var(--text-primary)' },
-                { label: 'Win %',   value: `${winRate}%`,                                          color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
-              ].map(s => (
-                <div key={s.label} style={{ padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
-                  <p style={{ fontSize: 16, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Trades list */}
-          {trades.length > 0 && (
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Trades</p>
-              <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
-                {trades.map((t, i) => {
-                  const up = Number(t.pnl) >= 0
-                  return (
-                    <Link key={t.id} href={`/trades/${t.id}`}
-                      style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 12, padding: '11px 14px', borderBottom: i < trades.length - 1 ? '1px solid var(--border-subtle)' : 'none', textDecoration: 'none', background: 'var(--bg-elevated)', transition: 'background 0.1s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-overlay)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{up ? 'WIN' : 'LOSS'}</span>
-                        </div>
-                        {t.strategy && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.strategy}</span>}
-                      </div>
-                      <span style={{ fontSize: 12, color: up ? 'var(--profit)' : 'var(--loss)', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                        {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', minWidth: 68, textAlign: 'right' }}>
-                        {formatCurrency(Number(t.pnl), true, symbol)}
-                      </span>
-                    </Link>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {trades.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '20px 0 8px' }}>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No trades on this day</p>
-              <Link href="/trades/new" style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', marginTop: 6, display: 'inline-block' }}>Log a trade →</Link>
-            </div>
-          )}
-
-          {/* Journal entry */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Journal</p>
-              <Link href={`/journal?date=${date}`} style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none' }}>Edit →</Link>
-            </div>
-            {entry ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {entry.mood && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 22 }}>{entry.mood}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Mood</span>
-                  </div>
-                )}
-                {[
-                  { label: 'Session notes',   value: entry.content },
-                  { label: 'Went well',       value: entry.went_well },
-                  { label: 'Went wrong',      value: entry.went_wrong },
-                  { label: 'Biggest lesson',  value: entry.biggest_lesson },
-                  { label: 'Focus tomorrow',  value: entry.focus_tomorrow },
-                ].filter(f => f.value).map(f => (
-                  <div key={f.label} style={{ padding: '12px 14px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 5 }}>{f.label}</p>
-                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{f.value}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: '16px 14px', background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No journal entry for this day</p>
-              </div>
-            )}
-          </div>
-
-          {/* AI placeholder */}
-          <div style={{ padding: '16px 18px', borderRadius: 8, background: 'var(--ai-dim)', border: '1px solid rgba(139,92,246,0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <Sparkles size={13} style={{ color: 'var(--ai-accent)' }} />
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>AI Day Summary</p>
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--ai-accent)', opacity: 0.7, lineHeight: 1.55 }}>
-              AI-powered summaries and pattern detection will appear here once enabled.
-            </p>
-          </div>
-
-        </div>
-      </div>
-    </>
-  )
+function isoWeekNum(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.valueOf() - yearStart.valueOf()) / 86400000 + 1) / 7)
 }
 
-// ─── Knowledge page editor ────────────────────────────────────────────────────
+function weekMondayUTC(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4))
+  const day  = jan4.getUTCDay() || 7
+  const mon  = new Date(jan4)
+  mon.setUTCDate(jan4.getUTCDate() - day + 1 + (week - 1) * 7)
+  return mon
+}
 
-function KnowledgeEditor({ page, onClose, onSaved }: { page: typeof KNOWLEDGE_PAGES[number]; onClose: () => void; onSaved: (content: string) => void }) {
-  const [content, setContent] = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [loaded, setLoaded]   = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+function getWeeksForYear(year: number): WeekInfo[] {
+  const today  = new Date()
+  const dec28  = new Date(Date.UTC(year, 11, 28))
+  const total  = isoWeekNum(dec28)
+  const result: WeekInfo[] = []
+  for (let w = 1; w <= total; w++) {
+    const mon = weekMondayUTC(year, w)
+    if (mon > today) break
+    const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6)
+    const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    result.push({
+      year, week: w,
+      slug: `week-${year}-${String(w).padStart(2, '0')}`,
+      start: mon.toISOString().slice(0, 10),
+      end:   sun.toISOString().slice(0, 10),
+      label: `${fmt(mon)} – ${fmt(sun)}`,
+    })
+  }
+  return result.reverse()
+}
 
-  useEffect(() => {
-    supabase.from('notebook_pages').select('content').eq('slug', page.slug).maybeSingle()
-      .then(({ data }) => { setContent(data?.content || ''); setLoaded(true) })
-  }, [page.slug])
+function getMonthsForYear(year: number): MonthInfo[] {
+  const today  = new Date()
+  const result: MonthInfo[] = []
+  for (let m = 0; m <= 11; m++) {
+    const date = new Date(year, m, 1)
+    if (date > today) break
+    result.push({
+      year, month: m,
+      slug:  `monthly-${year}-${String(m + 1).padStart(2, '0')}`,
+      label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+      start: localDateStr(new Date(year, m, 1)),
+      end:   localDateStr(new Date(year, m + 1, 0)),
+    })
+  }
+  return result.reverse()
+}
 
-  async function save() {
-    setSaving(true)
-    setError(null)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setSaving(false); return }
-    const { error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug: page.slug, title: page.title, content, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,slug' }
+function tradeDay(t: Trade): string {
+  return (t.trade_date ? t.trade_date.slice(0, 10) : null) || localDateStr(new Date(t.created_at))
+}
+
+// ─── Left sidebar ─────────────────────────────────────────────────────────────
+
+function FolderNav({ active, onSelect }: { active: string | null; onSelect: (id: string) => void }) {
+  const sectionLabel = (text: string) => (
+    <p key={text} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '20px 16px 6px', margin: 0 }}>
+      {text}
+    </p>
+  )
+
+  const folderBtn = (id: string, label: string) => {
+    const on = active === id
+    return (
+      <button key={id} onClick={() => onSelect(id)} style={{ width: '100%', textAlign: 'left', padding: '7px 16px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderLeft: `2px solid ${on ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', fontSize: 13, color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 500 : 400, transition: 'all 0.1s' }}
+        onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+        onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}
+      >{label}</button>
     )
-    if (err) { setError(err.message); setSaving(false); return }
-    onSaved(content)
-    setSaving(false)
-    onClose()
   }
 
-  const Icon = page.icon
-
   return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 50, backdropFilter: 'blur(2px)' }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 51, width: 560, background: 'var(--bg-surface)', borderLeft: '1px solid var(--border-default)', display: 'flex', flexDirection: 'column', boxShadow: '-16px 0 40px rgba(0,0,0,0.12)' }}>
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: page.dim, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icon size={16} style={{ color: page.color }} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.015em' }}>{page.title}</h2>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', cursor: 'pointer', color: 'var(--text-muted)' }}>
-            <X size={15} />
-          </button>
-        </div>
-        {loaded ? (
-          <>
-            <textarea
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder={`Write your ${page.title.toLowerCase()} here…\n\nMarkdown is supported. Use ## for headings, - for bullets, **bold**, etc.`}
-              style={{ flex: 1, padding: '20px 24px', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, fontFamily: 'inherit' }}
-              autoFocus
-            />
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexShrink: 0 }}>
-              {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1 }}>{error}</p>}
-              <button onClick={onClose} style={{ fontSize: 13, padding: '8px 16px', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
-              <button onClick={save} disabled={saving} className="btn-primary" style={{ fontSize: 13 }}>{saving ? 'Saving…' : 'Save'}</button>
-            </div>
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading…</p>
-          </div>
-        )}
-      </div>
-    </>
+    <div style={{ padding: '28px 0 20px' }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.015em', padding: '0 16px', marginBottom: 20 }}>Notebook</p>
+      {sectionLabel('Knowledge Base')}
+      {KB_FOLDERS.map(f => folderBtn(f.id, f.label))}
+      {sectionLabel('Performance')}
+      {folderBtn('weekly-recaps', 'Weekly Recaps')}
+      {folderBtn('monthly-reviews', 'Monthly Reviews')}
+      {sectionLabel('Planning')}
+      {PLANNING_FOLDERS.map(f => folderBtn(f.id, f.label))}
+    </div>
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Middle list ──────────────────────────────────────────────────────────────
+
+function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
+  active: string | null
+  trades: Trade[]
+  pages: Record<string, NotebookPage>
+  selectedNote: string | null
+  onSelect: (note: string) => void
+}) {
+  if (!active) {
+    return (
+      <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+        <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Select a folder</p>
+      </div>
+    )
+  }
+
+  // Knowledge Base
+  const kbFolder = KB_FOLDERS.find(f => f.id === active)
+  if (kbFolder) {
+    const page    = pages[kbFolder.slug]
+    const bullets = (page?.content ?? '').split('\n')
+      .filter(l => /^[-•*]\s/.test(l.trim()))
+      .map(l => l.trim().replace(/^[-•*]\s*/, ''))
+      .filter(Boolean).slice(0, 14)
+    const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+
+    return (
+      <div style={{ padding: '24px 0' }}>
+        <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{kbFolder.label}</p>
+          {updated && <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>Updated {updated}</p>}
+        </div>
+        <div style={{ padding: '8px 20px' }}>
+          {bullets.length > 0 ? bullets.map((b, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
+              <span style={{ color: 'var(--text-disabled)', fontSize: 12, lineHeight: '20px', flexShrink: 0 }}>·</span>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{b}</span>
+            </div>
+          )) : (
+            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', paddingTop: 8 }}>Nothing written yet</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Weekly Recaps
+  if (active === 'weekly-recaps') {
+    const year  = new Date().getFullYear()
+    const weeks = getWeeksForYear(year)
+
+    const weekStats: Record<string, { pnl: number; count: number }> = {}
+    trades.forEach(t => {
+      const d   = tradeDay(t)
+      const dt  = new Date(d + 'T12:00:00')
+      const slug = `week-${dt.getFullYear()}-${String(isoWeekNum(dt)).padStart(2, '0')}`
+      if (!weekStats[slug]) weekStats[slug] = { pnl: 0, count: 0 }
+      weekStats[slug].pnl   += Number(t.pnl || 0)
+      weekStats[slug].count += 1
+    })
+
+    return (
+      <div>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Weekly Recaps</p>
+          <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>{year}</p>
+        </div>
+        {weeks.map(w => {
+          const s  = weekStats[w.slug]
+          const on = selectedNote === w.slug
+          return (
+            <button key={w.slug} onClick={() => onSelect(w.slug)} style={{ width: '100%', textAlign: 'left', padding: '10px 20px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, transition: 'background 0.1s' }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', minWidth: 28, fontVariantNumeric: 'tabular-nums' }}>
+                W{String(w.week).padStart(2, '0')}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, lineHeight: 1.4 }}>{w.label}</span>
+              {s?.count ? (
+                <span style={{ fontSize: 11, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
+                  {s.pnl >= 0 ? '+' : ''}${Math.abs(s.pnl).toFixed(0)}
+                </span>
+              ) : <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>—</span>}
+              {pages[w.slug] && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)', display: 'block', opacity: 0.5, flexShrink: 0 }} />}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Monthly Reviews
+  if (active === 'monthly-reviews') {
+    const year   = new Date().getFullYear()
+    const months = getMonthsForYear(year)
+
+    const monthStats: Record<string, { pnl: number; count: number; wins: number }> = {}
+    trades.forEach(t => {
+      const d    = tradeDay(t)
+      const slug = `monthly-${d.slice(0, 4)}-${d.slice(5, 7)}`
+      if (!monthStats[slug]) monthStats[slug] = { pnl: 0, count: 0, wins: 0 }
+      monthStats[slug].pnl   += Number(t.pnl || 0)
+      monthStats[slug].count += 1
+      if (Number(t.pnl) > 0) monthStats[slug].wins += 1
+    })
+
+    return (
+      <div>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Monthly Reviews</p>
+          <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>{year}</p>
+        </div>
+        {months.map(m => {
+          const s  = monthStats[m.slug]
+          const on = selectedNote === m.slug
+          return (
+            <button key={m.slug} onClick={() => onSelect(m.slug)} style={{ width: '100%', textAlign: 'left', padding: '12px 20px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'background 0.1s' }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}
+            >
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 13, color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 500 : 400, marginBottom: s ? 2 : 0 }}>{m.label}</p>
+                {s && <p style={{ fontSize: 11, color: 'var(--text-disabled)' }}>{s.count} trade{s.count !== 1 ? 's' : ''} · {Math.round(s.wins / s.count * 100)}% win</p>}
+              </div>
+              {s ? (
+                <span style={{ fontSize: 12, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>
+                  {s.pnl >= 0 ? '+' : ''}${Math.abs(s.pnl).toFixed(0)}
+                </span>
+              ) : <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>—</span>}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Planning
+  const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
+  if (planFolder) {
+    const page    = pages[planFolder.slug]
+    const preview = page?.content?.trim().slice(0, 160)
+    return (
+      <div style={{ padding: '24px 0' }}>
+        <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{planFolder.label}</p>
+        </div>
+        <div style={{ padding: '12px 20px' }}>
+          {preview
+            ? <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{preview}</p>
+            : <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Nothing written yet</p>}
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
+// ─── Page editor (KB + Planning) ─────────────────────────────────────────────
+
+function PageEditor({ slug, title, page, onSaved }: {
+  slug: string; title: string; page: NotebookPage | null
+  onSaved: (p: NotebookPage) => void
+}) {
+  const [content, setContent] = useState(page?.content ?? '')
+  const [dirty,   setDirty]   = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  useEffect(() => { setContent(page?.content ?? ''); setDirty(false) }, [slug, page?.content])
+
+  async function save() {
+    setSaving(true); setError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Not signed in'); setSaving(false); return }
+    const { data, error: err } = await supabase.from('notebook_pages').upsert(
+      { user_id: user.id, slug, title, content, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,slug' }
+    ).select().single()
+    if (err) { setError(err.message); setSaving(false); return }
+    onSaved(data as NotebookPage)
+    setDirty(false); setSaving(false)
+  }
+
+  const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null
+
+  return (
+    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
+        <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
+      </div>
+
+      <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 28 }} />
+
+      <textarea
+        value={content}
+        onChange={e => { setContent(e.target.value); setDirty(true) }}
+        placeholder={`Write your ${title.toLowerCase()} here…\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
+        style={{ flex: 1, minHeight: 440, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 20, borderTop: '1px solid var(--border-subtle)', marginTop: 24 }}>
+        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1 }}>{error}</p>}
+        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Weekly recap ─────────────────────────────────────────────────────────────
+
+const WEEKLY_FIELDS = [
+  { key: 'went_well',       label: 'What went well this week?' },
+  { key: 'can_improve',     label: 'What can improve?' },
+  { key: 'biggest_lesson',  label: 'Biggest lesson' },
+  { key: 'emotional_state', label: 'Emotional state' },
+  { key: 'next_focus',      label: "Next week's focus" },
+  { key: 'commitments',     label: 'Commitments' },
+] as const
+
+type WeeklyKey = typeof WEEKLY_FIELDS[number]['key']
+type WeeklyForm = Record<WeeklyKey, string>
+const EMPTY_WEEKLY: WeeklyForm = { went_well: '', can_improve: '', biggest_lesson: '', emotional_state: '', next_focus: '', commitments: '' }
+
+function parseWeekly(content: string | null | undefined): WeeklyForm {
+  if (!content) return { ...EMPTY_WEEKLY }
+  try { return { ...EMPTY_WEEKLY, ...JSON.parse(content) } } catch { return { ...EMPTY_WEEKLY, went_well: content } }
+}
+
+function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
+  week: WeekInfo; trades: Trade[]; page: NotebookPage | null
+  onSaved: (p: NotebookPage) => void; symbol: string
+}) {
+  const [form,      setForm]      = useState<WeeklyForm>(() => parseWeekly(page?.content))
+  const [savedForm, setSavedForm] = useState<WeeklyForm>(() => parseWeekly(page?.content))
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    const f = parseWeekly(page?.content)
+    setForm(f); setSavedForm(f)
+  }, [week.slug, page?.content])
+
+  const weekTrades  = trades.filter(t => { const d = tradeDay(t); return d >= week.start && d <= week.end })
+  const weekPnl     = weekTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
+  const wins        = weekTrades.filter(t => Number(t.pnl) > 0)
+  const losses      = weekTrades.filter(t => Number(t.pnl) < 0)
+  const winRate     = weekTrades.length > 0 ? Math.round(wins.length / weekTrades.length * 100) : 0
+  const rrTrades    = weekTrades.filter(t => t.rr != null)
+  const avgR        = rrTrades.length > 0 ? rrTrades.reduce((s, t) => s + Number(t.rr), 0) / rrTrades.length : null
+  const tradingDays = new Set(weekTrades.map(t => tradeDay(t))).size
+
+  // Daily cumulative chart
+  const byDay: Record<string, number> = {}
+  weekTrades.forEach(t => { const d = tradeDay(t); byDay[d] = (byDay[d] || 0) + Number(t.pnl || 0) })
+  let cum = 0
+  const chartData = [{ day: '', pnl: 0 }]
+  for (let i = 0; i < 5; i++) {
+    const dt = new Date(week.start + 'T12:00:00')
+    dt.setDate(dt.getDate() + i)
+    cum += byDay[localDateStr(dt)] || 0
+    chartData.push({ day: ['Mon','Tue','Wed','Thu','Fri'][i], pnl: parseFloat(cum.toFixed(2)) })
+  }
+  const chartColor = weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)'
+
+  const dirty = WEEKLY_FIELDS.some(f => form[f.key] !== savedForm[f.key])
+
+  async function save() {
+    setSaving(true); setError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Not signed in'); setSaving(false); return }
+    const { data, error: err } = await supabase.from('notebook_pages').upsert(
+      { user_id: user.id, slug: week.slug, title: `Week ${week.week} ${week.year}`, content: JSON.stringify(form), updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,slug' }
+    ).select().single()
+    if (err) { setError(err.message); setSaving(false); return }
+    onSaved(data as NotebookPage); setSavedForm(form); setSaving(false)
+  }
+
+  const startFmt = new Date(week.start + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  const endFmt   = new Date(week.end   + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+
+  return (
+    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 32 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
+          Week {String(week.week).padStart(2, '0')}
+        </p>
+        <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+          {startFmt} – {endFmt}
+        </h1>
+        {weekTrades.length === 0 && <p style={{ fontSize: 13, color: 'var(--text-disabled)', marginTop: 8, fontStyle: 'italic' }}>No trades this week</p>}
+      </div>
+
+      {/* Stats row */}
+      {weekTrades.length > 0 && (
+        <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)', padding: '18px 0', marginBottom: 32, gap: 0 }}>
+          {[
+            { label: 'Net P&L',  value: formatCurrency(weekPnl, true, symbol), color: weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+            { label: 'Trades',   value: String(weekTrades.length) },
+            { label: 'Win rate', value: `${winRate}%`, color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
+            { label: 'Avg R',    value: avgR != null ? `${avgR >= 0 ? '+' : ''}${avgR.toFixed(1)}R` : '—' },
+            { label: 'Days',     value: String(tradingDays) },
+          ].map((s, i, arr) => (
+            <div key={s.label} style={{ flex: 1, paddingRight: i < arr.length - 1 ? 20 : 0, borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', marginRight: i < arr.length - 1 ? 20 : 0 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: (s as any).color ?? 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Equity curve — thin, context only */}
+      {weekTrades.length > 0 && (
+        <div style={{ marginBottom: 36, height: 56 }}>
+          <ResponsiveContainer width="100%" height={56}>
+            <LineChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+              <YAxis hide domain={['auto', 'auto']} />
+              <XAxis dataKey="day" tick={{ fill: 'var(--text-disabled)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <ReferenceLine y={0} stroke="var(--border-subtle)" strokeWidth={1} />
+              <Line type="monotone" dataKey="pnl" stroke={chartColor} strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0, fill: chartColor }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 36 }} />
+
+      {/* Reflection */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
+        {WEEKLY_FIELDS.map(f => (
+          <div key={f.key}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>{f.label}</p>
+            <textarea
+              value={form[f.key]}
+              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+              placeholder="Write here…"
+              rows={3}
+              style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.85, color: 'var(--text-primary)', fontFamily: 'inherit', paddingBottom: 12 }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1, alignSelf: 'center' }}>{error}</p>}
+        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
+          {saving ? 'Saving…' : 'Save reflection'}
+        </button>
+      </div>
+      <div style={{ height: 60 }} />
+    </div>
+  )
+}
+
+// ─── Monthly review ───────────────────────────────────────────────────────────
+
+const MONTHLY_FIELDS = [
+  { key: 'overview',        label: 'Month overview' },
+  { key: 'best_period',     label: 'Best period' },
+  { key: 'biggest_lesson',  label: 'Biggest lesson' },
+  { key: 'next_month',      label: 'Focus for next month' },
+] as const
+
+type MonthlyKey = typeof MONTHLY_FIELDS[number]['key']
+type MonthlyForm = Record<MonthlyKey, string>
+const EMPTY_MONTHLY: MonthlyForm = { overview: '', best_period: '', biggest_lesson: '', next_month: '' }
+
+function parseMonthly(c: string | null | undefined): MonthlyForm {
+  if (!c) return { ...EMPTY_MONTHLY }
+  try { return { ...EMPTY_MONTHLY, ...JSON.parse(c) } } catch { return { ...EMPTY_MONTHLY, overview: c } }
+}
+
+function MonthlyReview({ month, trades, page, onSaved, symbol }: {
+  month: MonthInfo; trades: Trade[]; page: NotebookPage | null
+  onSaved: (p: NotebookPage) => void; symbol: string
+}) {
+  const [form,      setForm]      = useState<MonthlyForm>(() => parseMonthly(page?.content))
+  const [savedForm, setSavedForm] = useState<MonthlyForm>(() => parseMonthly(page?.content))
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
+
+  useEffect(() => { const f = parseMonthly(page?.content); setForm(f); setSavedForm(f) }, [month.slug, page?.content])
+
+  const mTrades  = trades.filter(t => { const d = tradeDay(t); return d >= month.start && d <= month.end })
+  const mPnl     = mTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
+  const mWins    = mTrades.filter(t => Number(t.pnl) > 0).length
+  const winRate  = mTrades.length > 0 ? Math.round(mWins / mTrades.length * 100) : 0
+  const mDays    = new Set(mTrades.map(t => tradeDay(t))).size
+
+  const dirty = MONTHLY_FIELDS.some(f => form[f.key] !== savedForm[f.key])
+
+  async function save() {
+    setSaving(true); setError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError('Not signed in'); setSaving(false); return }
+    const { data, error: err } = await supabase.from('notebook_pages').upsert(
+      { user_id: user.id, slug: month.slug, title: month.label, content: JSON.stringify(form), updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,slug' }
+    ).select().single()
+    if (err) { setError(err.message); setSaving(false); return }
+    onSaved(data as NotebookPage); setSavedForm(form); setSaving(false)
+  }
+
+  return (
+    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 32 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Monthly Review</p>
+        <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1 }}>{month.label}</h1>
+      </div>
+
+      {mTrades.length > 0 && (
+        <div style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)', borderBottom: '1px solid var(--border-subtle)', padding: '18px 0', marginBottom: 32, gap: 0 }}>
+          {[
+            { label: 'Net P&L',  value: formatCurrency(mPnl, true, symbol), color: mPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+            { label: 'Trades',   value: String(mTrades.length) },
+            { label: 'Win rate', value: `${winRate}%`, color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
+            { label: 'Days',     value: String(mDays) },
+          ].map((s, i, arr) => (
+            <div key={s.label} style={{ flex: 1, paddingRight: i < arr.length - 1 ? 20 : 0, borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', marginRight: i < arr.length - 1 ? 20 : 0 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: (s as any).color ?? 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 36 }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
+        {MONTHLY_FIELDS.map(f => (
+          <div key={f.key}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>{f.label}</p>
+            <textarea
+              value={form[f.key]}
+              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+              placeholder="Write here…"
+              rows={4}
+              style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.85, color: 'var(--text-primary)', fontFamily: 'inherit', paddingBottom: 12 }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1, alignSelf: 'center' }}>{error}</p>}
+        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
+          {saving ? 'Saving…' : 'Save review'}
+        </button>
+      </div>
+      <div style={{ height: 60 }} />
+    </div>
+  )
+}
+
+// ─── Right panel dispatcher ───────────────────────────────────────────────────
+
+function RightPanel({ active, selectedNote, trades, pages, onSaved, symbol }: {
+  active: string | null; selectedNote: string | null
+  trades: Trade[]; pages: Record<string, NotebookPage>
+  onSaved: (p: NotebookPage) => void; symbol: string
+}) {
+  const kbFolder = KB_FOLDERS.find(f => f.id === active)
+  if (kbFolder) return <PageEditor slug={kbFolder.slug} title={kbFolder.label} page={pages[kbFolder.slug] ?? null} onSaved={onSaved} />
+
+  const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
+  if (planFolder) return <PageEditor slug={planFolder.slug} title={planFolder.label} page={pages[planFolder.slug] ?? null} onSaved={onSaved} />
+
+  if (active === 'weekly-recaps' && selectedNote) {
+    const weeks = getWeeksForYear(new Date().getFullYear())
+    const week  = weeks.find(w => w.slug === selectedNote)
+    if (week) return <WeeklyRecap week={week} trades={trades} page={pages[selectedNote] ?? null} onSaved={onSaved} symbol={symbol} />
+  }
+
+  if (active === 'monthly-reviews' && selectedNote) {
+    const months = getMonthsForYear(new Date().getFullYear())
+    const month  = months.find(m => m.slug === selectedNote)
+    if (month) return <MonthlyReview month={month} trades={trades} page={pages[selectedNote] ?? null} onSaved={onSaved} symbol={symbol} />
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>
+        {active === 'weekly-recaps' || active === 'monthly-reviews' ? 'Select a period to begin' : active ? 'Open a note to begin writing' : 'Select a folder from the left'}
+      </p>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NotebookPage() {
   const { symbol } = useCurrency()
-  const today    = new Date()
-  const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
-  const [trades, setTrades]     = useState<Trade[]>([])
-  const [entries, setEntries]   = useState<JournalEntry[]>([])
-  const [kbPages, setKbPages]   = useState<Record<string, NotebookPage>>({})
-  const [loading, setLoading]   = useState(true)
-  const [selectedDay, setSelectedDay] = useState<string | null>(null)
-  const [kbOpen, setKbOpen]     = useState<string | null>(null)
+  const [trades,  setTrades]  = useState<Trade[]>([])
+  const [pages,   setPages]   = useState<Record<string, NotebookPage>>({})
+  const [loading, setLoading] = useState(true)
 
-  const year  = viewDate.getFullYear()
-  const month = viewDate.getMonth()
-
-  const monthStart = localDateStr(new Date(year, month, 1))
-  const monthEnd   = localDateStr(new Date(year, month + 1, 0))
+  const [activeFolder,  setActiveFolder]  = useState<string | null>(null)
+  const [selectedNote,  setSelectedNote]  = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
-      setLoading(true)
-      const [{ data: tData }, { data: eData }, { data: kData }] = await Promise.all([
-        supabase.from('trades')
-          .select('id, symbol, direction, strategy, pnl, return_pct, trade_date, created_at')
-          .gte('trade_date', monthStart)
-          .lte('trade_date', monthEnd)
-          .order('trade_date'),
-        supabase.from('journal_entries')
-          .select('entry_date, content, went_well, went_wrong, biggest_lesson, focus_tomorrow, mood')
-          .gte('entry_date', monthStart)
-          .lte('entry_date', monthEnd),
+      const since = new Date(); since.setFullYear(since.getFullYear() - 2)
+      const sinceStr = since.toISOString().slice(0, 10)
+      const [{ data: tData }, { data: kData }] = await Promise.all([
+        supabase.from('trades').select('id, symbol, direction, pnl, return_pct, rr, trade_date, created_at').gte('trade_date', sinceStr).order('trade_date'),
         supabase.from('notebook_pages').select('*'),
       ])
-      setTrades(tData || [])
-      setEntries(eData || [])
+      setTrades((tData || []) as Trade[])
       const map: Record<string, NotebookPage> = {}
       ;(kData || []).forEach((p: NotebookPage) => { map[p.slug] = p })
-      setKbPages(map)
+      setPages(map)
       setLoading(false)
     }
     load()
-  }, [monthStart, monthEnd])
+  }, [])
 
-  // Build day map
-  const dayMap: Record<string, DayData> = {}
-  trades.forEach(t => {
-    const d = t.trade_date || t.created_at.split('T')[0]
-    if (!dayMap[d]) dayMap[d] = { pnl: 0, trades: [], entry: null }
-    dayMap[d].pnl += Number(t.pnl || 0)
-    dayMap[d].trades.push(t)
-  })
-  entries.forEach(e => {
-    const d = e.entry_date
-    if (!dayMap[d]) dayMap[d] = { pnl: 0, trades: [], entry: null }
-    dayMap[d].entry = e
-  })
-
-  // Calendar cells
-  const daysInMonth: { date: string; n: number }[] = []
-  for (let d = new Date(year, month, 1); d.getMonth() === month; d.setDate(d.getDate() + 1))
-    daysInMonth.push({ date: localDateStr(d), n: d.getDate() })
-
-  const firstDow = new Date(year, month, 1).getDay()
-  const offset   = firstDow === 0 ? 6 : firstDow - 1
-  const totalCells = Math.ceil((offset + daysInMonth.length) / 7) * 7
-  const cells: ({ date: string; n: number } | null)[] = [
-    ...Array(offset).fill(null),
-    ...daysInMonth,
-    ...Array(totalCells - offset - daysInMonth.length).fill(null),
-  ]
-
-  const todayStr = localDateStr(today)
-  const canNext  = new Date(year, month + 1, 1) <= today
-
-  // Weekly totals
-  const weeks: { days: typeof cells; pnl: number; trades: number }[] = []
-  for (let i = 0; i < cells.length; i += 7) {
-    const wDays = cells.slice(i, i + 7)
-    let wPnl = 0, wTrades = 0
-    wDays.forEach(d => { if (d && dayMap[d.date]) { wPnl += dayMap[d.date].pnl; wTrades += dayMap[d.date].trades.length } })
-    weeks.push({ days: wDays, pnl: wPnl, trades: wTrades })
+  function handleFolderSelect(id: string) {
+    setActiveFolder(id)
+    const isKb   = KB_FOLDERS.some(f => f.id === id)
+    const isPlan = PLANNING_FOLDERS.some(f => f.id === id)
+    if (isKb || isPlan) setSelectedNote(id)
+    else setSelectedNote(null)
   }
 
-  // Month stats
-  const monthPnl    = Object.values(dayMap).reduce((s, d) => s + d.pnl, 0)
-  const monthTrades = trades.length
-  const monthWins   = trades.filter(t => Number(t.pnl) > 0).length
-  const tradingDays = Object.keys(dayMap).filter(d => dayMap[d].trades.length > 0).length
-  const maxAbs      = Math.max(...daysInMonth.map(d => Math.abs(dayMap[d.date]?.pnl ?? 0)), 1)
-
-  const selectedData = selectedDay ? (dayMap[selectedDay] || { pnl: 0, trades: [], entry: null }) : null
+  function handleSaved(page: NotebookPage) {
+    setPages(prev => ({ ...prev, [page.slug]: page }))
+  }
 
   return (
-    <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '36px 56px 28px' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Notebook</h1>
-          <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Daily review, monthly calendar, and knowledge base</p>
-        </div>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
+      {/* Left — folder nav */}
+      <div style={{ width: 220, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        <FolderNav active={activeFolder} onSelect={handleFolderSelect} />
       </div>
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 36 }}>
-
-        {/* Calendar */}
-        <div>
-          {/* Month nav + stats */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <button onClick={() => setViewDate(new Date(year, month - 1, 1))} style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <ChevronLeft size={14} />
-              </button>
-              <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', minWidth: 160 }}>
-                {viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </h2>
-              <button onClick={() => canNext && setViewDate(new Date(year, month + 1, 1))} style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', cursor: canNext ? 'pointer' : 'default', color: canNext ? 'var(--text-muted)' : 'var(--border-default)', opacity: canNext ? 1 : 0.4 }}>
-                <ChevronRight size={14} />
-              </button>
-              {viewDate.getMonth() !== today.getMonth() || viewDate.getFullYear() !== today.getFullYear() ? (
-                <button onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), 1))} style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>
-                  Today
-                </button>
-              ) : null}
-            </div>
-            {!loading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>Month P&L</p>
-                  <p style={{ fontSize: 20, fontWeight: 600, color: monthPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em' }}>
-                    {formatCurrency(monthPnl, true, symbol)}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>Trades</p>
-                  <p style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em' }}>{monthTrades}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>Trading days</p>
-                  <p style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em' }}>{tradingDays}</p>
-                </div>
-                {monthTrades > 0 && (
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 2 }}>Win %</p>
-                    <p style={{ fontSize: 20, fontWeight: 600, color: monthWins / monthTrades >= 0.5 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.025em' }}>
-                      {Math.round(monthWins / monthTrades * 100)}%
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="card" style={{ padding: '20px 24px', overflow: 'hidden' }}>
-            {/* Day headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr) 80px', gap: 4, marginBottom: 6 }}>
-              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-                <div key={d} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textAlign: 'center', paddingBottom: 4 }}>{d}</div>
-              ))}
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textAlign: 'center', paddingBottom: 4 }}>Week</div>
-            </div>
-
-            {/* Weeks */}
-            {loading ? (
-              <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading…</p>
-              </div>
-            ) : weeks.map((week, wi) => (
-              <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr) 80px', gap: 4, marginBottom: 4 }}>
-                {week.days.map((cell, ci) => {
-                  if (!cell) return <div key={ci} />
-                  const data     = dayMap[cell.date]
-                  const isToday  = cell.date === todayStr
-                  const isFuture = cell.date > todayStr
-                  const isSelected = cell.date === selectedDay
-                  const hasTrades = (data?.trades.length ?? 0) > 0
-                  const hasJournal = !!data?.entry
-                  const alpha = data && hasTrades ? Math.max(0.08, Math.abs(data.pnl) / maxAbs) * 0.4 : 0
-                  const bg = isSelected
-                    ? 'var(--bg-overlay)'
-                    : data && hasTrades
-                    ? data.pnl >= 0 ? `rgba(61,153,112,${alpha})` : `rgba(192,57,43,${alpha})`
-                    : 'var(--bg-elevated)'
-
-                  return (
-                    <button key={cell.date}
-                      onClick={() => setSelectedDay(isSelected ? null : cell.date)}
-                      disabled={isFuture}
-                      style={{
-                        borderRadius: 8, padding: '8px 6px 6px', textAlign: 'center', cursor: isFuture ? 'default' : 'pointer',
-                        background: bg, opacity: isFuture ? 0.25 : 1,
-                        border: isToday
-                          ? `2px solid var(--accent)`
-                          : isSelected
-                          ? `2px solid var(--border-strong)`
-                          : `1px solid ${(data && hasTrades) ? 'transparent' : 'var(--border-subtle)'}`,
-                        minHeight: 68, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 3,
-                        transition: 'all 0.1s',
-                      }}>
-                      <span style={{ fontSize: 11, fontWeight: isToday ? 700 : 500, color: isToday ? 'var(--accent)' : 'var(--text-secondary)', lineHeight: 1 }}>{cell.n}</span>
-                      {data && hasTrades && (
-                        <>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: data.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                            {data.pnl >= 0 ? '+' : ''}{symbol}{Math.abs(data.pnl) >= 1000 ? (data.pnl / 1000).toFixed(1) + 'k' : Math.abs(data.pnl).toFixed(0)}
-                          </span>
-                          <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1 }}>{data.trades.length}t</span>
-                        </>
-                      )}
-                      {hasJournal && !hasTrades && (
-                        <span style={{ fontSize: 9, color: 'var(--journal-rose)', fontWeight: 500 }}>📔</span>
-                      )}
-                      {hasJournal && hasTrades && (
-                        <span style={{ fontSize: 8, color: 'var(--journal-rose)', lineHeight: 1, opacity: 0.8 }}>●</span>
-                      )}
-                    </button>
-                  )
-                })}
-                {/* Weekly total */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', borderRadius: 8, background: week.pnl !== 0 ? (week.pnl > 0 ? 'var(--profit-dim)' : 'var(--loss-dim)') : 'transparent' }}>
-                  {week.trades > 0 ? (
-                    <>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: week.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                        {week.pnl >= 0 ? '+' : ''}{symbol}{Math.abs(week.pnl) >= 1000 ? (week.pnl / 1000).toFixed(1) + 'k' : Math.abs(week.pnl).toFixed(0)}
-                      </span>
-                      <span style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>{week.trades}t</span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Knowledge pages */}
-        <div>
-          <div style={{ marginBottom: 18 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>Knowledge Base</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Capture patterns, mistakes, and insights that compound over time</p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-            {KNOWLEDGE_PAGES.map(pg => {
-              const Icon    = pg.icon
-              const saved   = kbPages[pg.slug]
-              const preview = saved?.content?.slice(0, 80)
-              const words   = saved?.content?.trim().split(/\s+/).filter(Boolean).length ?? 0
-              const updated = saved ? new Date(saved.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
-              return (
-                <button key={pg.slug}
-                  onClick={() => setKbOpen(pg.slug)}
-                  style={{ textAlign: 'left', cursor: 'pointer', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '20px', transition: 'all 0.12s' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.border = `1px solid ${pg.color}40`; (e.currentTarget as HTMLElement).style.background = pg.dim }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.border = '1px solid var(--border-subtle)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 9, background: pg.dim, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon size={18} style={{ color: pg.color }} />
-                    </div>
-                    {saved && <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-disabled)', marginTop: 4 }}>{updated}</span>}
-                  </div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 6 }}>{pg.title}</p>
-                  {preview ? (
-                    <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                      {preview}{saved?.content && saved.content.length > 80 ? '…' : ''}
-                    </p>
-                  ) : (
-                    <p style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Nothing written yet — tap to start</p>
-                  )}
-                  {words > 0 && <p style={{ fontSize: 10, color: 'var(--text-disabled)', marginTop: 8 }}>{words} words</p>}
-                </button>
-              )
-            })}
-          </div>
-        </div>
+      {/* Middle — note list */}
+      <div style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
+        {loading
+          ? <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: 'var(--text-disabled)' }}>Loading…</p></div>
+          : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} />}
       </div>
 
-      {/* Slide-over: day detail */}
-      {selectedDay && selectedData && (
-        <DaySlideOver date={selectedDay} data={selectedData} onClose={() => setSelectedDay(null)} />
-      )}
-
-      {/* Slide-over: knowledge editor */}
-      {kbOpen && (() => {
-        const pg = KNOWLEDGE_PAGES.find(p => p.slug === kbOpen)!
-        return (
-          <KnowledgeEditor
-            page={pg}
-            onClose={() => setKbOpen(null)}
-            onSaved={content => {
-              setKbPages(prev => ({
-                ...prev,
-                [pg.slug]: { ...prev[pg.slug], slug: pg.slug, title: pg.title, content, updated_at: new Date().toISOString(), id: prev[pg.slug]?.id || '' },
-              }))
-            }}
-          />
-        )
-      })()}
+      {/* Right — content */}
+      <div style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
+        <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} symbol={symbol} />
+      </div>
     </div>
   )
 }
