@@ -437,8 +437,12 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
 
       <textarea
         ref={taRef}
-        value={content}
-        onChange={e => handleChange(e.target.value)}
+        value={content.replace(/\n?!\[[^\]]*\]\([^)]+\)\n?/g, '').trimEnd()}
+        onChange={e => {
+          const imgs = extractImages(content)
+          const imgBlock = imgs.length > 0 ? '\n' + imgs.map(u => `![](${u})`).join('\n') : ''
+          handleChange(e.target.value + imgBlock)
+        }}
         placeholder={`Write your ${title.toLowerCase()} here…\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
         style={{ flex: 1, minHeight: 200, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
       />
@@ -446,7 +450,14 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
       {extractImages(content).length > 0 && (
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {extractImages(content).map((url, i) => (
-            <img key={i} src={url} alt="" style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'block' }} />
+            <div key={i} style={{ position: 'relative' }}>
+              <img src={url} alt="" style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'block' }} />
+              <button type="button"
+                onClick={() => handleChange(content.replace(`\n![](${url})`, '').replace(`![](${url})\n`, '').replace(`![](${url})`, ''))}
+                style={{ position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer', color: '#fff', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}
