@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
@@ -301,24 +301,60 @@ function PageEditor({ slug, title, page, onSaved }: {
   slug: string; title: string; page: NotebookPage | null
   onSaved: (p: NotebookPage) => void
 }) {
-  const [content, setContent] = useState(page?.content ?? '')
-  const [dirty,   setDirty]   = useState(false)
-  const [saving,  setSaving]  = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
+  const [content,   setContent]   = useState(page?.content ?? '')
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const taRef    = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { setContent(page?.content ?? ''); setDirty(false) }, [slug, page?.content])
+  useEffect(() => {
+    setContent(page?.content ?? '')
+    setSaveState('idle')
+    setSaveError(null)
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [slug, page?.content])
 
-  async function save() {
-    setSaving(true); setError(null)
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+
+  async function doSave(text: string) {
+    if (!text.trim() && !page) return
+    setSaveState('saving')
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setSaving(false); return }
+    if (!user) { setSaveState('error'); setSaveError('Not signed in'); return }
     const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug, title, content, updated_at: new Date().toISOString() },
+      { user_id: user.id, slug, title, content: text, updated_at: new Date().toISOString() },
       { onConflict: 'user_id,slug' }
     ).select().single()
-    if (err) { setError(err.message); setSaving(false); return }
+    if (err) { setSaveState('error'); setSaveError(err.message); return }
     onSaved(data as NotebookPage)
-    setDirty(false); setSaving(false)
+    setSaveState('saved')
+    setTimeout(() => setSaveState(s => s === 'saved' ? 'idle' : s), 2500)
+  }
+
+  function handleChange(value: string) {
+    setContent(value)
+    setSaveState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSave(value), 1500)
+  }
+
+  async function handleAttach(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setSaveError(null)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaveError('Not signed in'); return }
+    const ext  = file.name.split('.').pop() ?? 'png'
+    const path = `notebook/${user.id}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await supabase.storage.from('screenshots').upload(path, file, { upsert: true })
+    if (uploadErr) { setSaveError(`Upload failed: ${uploadErr.message}`); return }
+    const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(path)
+    const url    = urlData.publicUrl
+    const ta     = taRef.current
+    const insert = `\n![](${url})\n`
+    const pos    = ta?.selectionStart ?? content.length
+    handleChange(content.slice(0, pos) + insert + content.slice(pos))
+    e.target.value = ''
   }
 
   const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null
@@ -327,23 +363,32 @@ function PageEditor({ slug, title, page, onSaved }: {
     <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
-        <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
+          {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
+          {saveState === 'saved'  && <span style={{ fontSize: 12, color: 'var(--profit)' }}>Saved</span>}
+          {saveState === 'error'  && <span style={{ fontSize: 12, color: 'var(--loss)' }}>{saveError}</span>}
+        </div>
       </div>
 
       <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 28 }} />
 
       <textarea
+        ref={taRef}
         value={content}
-        onChange={e => { setContent(e.target.value); setDirty(true) }}
+        onChange={e => handleChange(e.target.value)}
         placeholder={`Write your ${title.toLowerCase()} here…\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
         style={{ flex: 1, minHeight: 440, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 20, borderTop: '1px solid var(--border-subtle)', marginTop: 24 }}>
-        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1 }}>{error}</p>}
-        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+      <div style={{ paddingTop: 20, borderTop: '1px solid var(--border-subtle)', marginTop: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-disabled)', cursor: 'pointer', userSelect: 'none' as const }}
+          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-disabled)')}>
+          ↑ Attach image
+          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAttach} />
+        </label>
+        <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>PNG · JPG · up to 10 MB · inserted as image</span>
       </div>
     </div>
   )
@@ -375,13 +420,17 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
 }) {
   const [form,      setForm]      = useState<WeeklyForm>(() => parseWeekly(page?.content))
   const [savedForm, setSavedForm] = useState<WeeklyForm>(() => parseWeekly(page?.content))
-  const [saving,    setSaving]    = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error,     setError]     = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const f = parseWeekly(page?.content)
-    setForm(f); setSavedForm(f)
+    setForm(f); setSavedForm(f); setSaveState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
   }, [week.slug, page?.content])
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
   const weekTrades  = trades.filter(t => { const d = tradeDay(t); return d >= week.start && d <= week.end })
   const weekPnl     = weekTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
@@ -405,19 +454,29 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
   }
   const chartColor = weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)'
 
-  const dirty = WEEKLY_FIELDS.some(f => form[f.key] !== savedForm[f.key])
-
-  async function save() {
-    setSaving(true); setError(null)
+  async function doSave(f: WeeklyForm) {
+    setSaveState('saving'); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setSaving(false); return }
+    if (!user) { setSaveState('error'); setError('Not signed in'); return }
     const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug: week.slug, title: `Week ${week.week} ${week.year}`, content: JSON.stringify(form), updated_at: new Date().toISOString() },
+      { user_id: user.id, slug: week.slug, title: `Week ${week.week} ${week.year}`, content: JSON.stringify(f), updated_at: new Date().toISOString() },
       { onConflict: 'user_id,slug' }
     ).select().single()
-    if (err) { setError(err.message); setSaving(false); return }
-    onSaved(data as NotebookPage); setSavedForm(form); setSaving(false)
+    if (err) { setSaveState('error'); setError(err.message); return }
+    onSaved(data as NotebookPage); setSavedForm(f)
+    setSaveState('saved')
+    setTimeout(() => setSaveState(s => s === 'saved' ? 'idle' : s), 2500)
   }
+
+  function updateField(key: WeeklyKey, value: string) {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    setSaveState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSave(next), 1500)
+  }
+
+  const dirty = WEEKLY_FIELDS.some(f => form[f.key] !== savedForm[f.key])
 
   const startFmt = new Date(week.start + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
   const endFmt   = new Date(week.end   + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -476,7 +535,7 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>{f.label}</p>
             <textarea
               value={form[f.key]}
-              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+              onChange={e => updateField(f.key, e.target.value)}
               placeholder="Write here…"
               rows={3}
               style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.85, color: 'var(--text-primary)', fontFamily: 'inherit', paddingBottom: 12 }}
@@ -485,10 +544,12 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
         ))}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1, alignSelf: 'center' }}>{error}</p>}
-        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
-          {saving ? 'Saving…' : 'Save reflection'}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
+        {saveState === 'saved'  && <span style={{ fontSize: 12, color: 'var(--profit)' }}>Saved</span>}
+        {saveState === 'error'  && <span style={{ fontSize: 12, color: 'var(--loss)' }}>{error}</span>}
+        <button onClick={() => doSave(form)} disabled={saveState === 'saving' || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && saveState !== 'saving' ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
+          Save reflection
         </button>
       </div>
       <div style={{ height: 60 }} />
@@ -520,10 +581,16 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
 }) {
   const [form,      setForm]      = useState<MonthlyForm>(() => parseMonthly(page?.content))
   const [savedForm, setSavedForm] = useState<MonthlyForm>(() => parseMonthly(page?.content))
-  const [saving,    setSaving]    = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error,     setError]     = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => { const f = parseMonthly(page?.content); setForm(f); setSavedForm(f) }, [month.slug, page?.content])
+  useEffect(() => {
+    const f = parseMonthly(page?.content); setForm(f); setSavedForm(f); setSaveState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [month.slug, page?.content])
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
   const mTrades  = trades.filter(t => { const d = tradeDay(t); return d >= month.start && d <= month.end })
   const mPnl     = mTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
@@ -533,16 +600,26 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
 
   const dirty = MONTHLY_FIELDS.some(f => form[f.key] !== savedForm[f.key])
 
-  async function save() {
-    setSaving(true); setError(null)
+  async function doSave(f: MonthlyForm) {
+    setSaveState('saving'); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setSaving(false); return }
+    if (!user) { setSaveState('error'); setError('Not signed in'); return }
     const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug: month.slug, title: month.label, content: JSON.stringify(form), updated_at: new Date().toISOString() },
+      { user_id: user.id, slug: month.slug, title: month.label, content: JSON.stringify(f), updated_at: new Date().toISOString() },
       { onConflict: 'user_id,slug' }
     ).select().single()
-    if (err) { setError(err.message); setSaving(false); return }
-    onSaved(data as NotebookPage); setSavedForm(form); setSaving(false)
+    if (err) { setSaveState('error'); setError(err.message); return }
+    onSaved(data as NotebookPage); setSavedForm(f)
+    setSaveState('saved')
+    setTimeout(() => setSaveState(s => s === 'saved' ? 'idle' : s), 2500)
+  }
+
+  function updateField(key: MonthlyKey, value: string) {
+    const next = { ...form, [key]: value }
+    setForm(next)
+    setSaveState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSave(next), 1500)
   }
 
   return (
@@ -576,7 +653,7 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
             <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>{f.label}</p>
             <textarea
               value={form[f.key]}
-              onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+              onChange={e => updateField(f.key, e.target.value)}
               placeholder="Write here…"
               rows={4}
               style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.85, color: 'var(--text-primary)', fontFamily: 'inherit', paddingBottom: 12 }}
@@ -585,10 +662,12 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
         ))}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-        {error && <p style={{ fontSize: 12, color: 'var(--loss)', flex: 1, alignSelf: 'center' }}>{error}</p>}
-        <button onClick={save} disabled={saving || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && !saving ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
-          {saving ? 'Saving…' : 'Save review'}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingTop: 28, marginTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+        {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
+        {saveState === 'saved'  && <span style={{ fontSize: 12, color: 'var(--profit)' }}>Saved</span>}
+        {saveState === 'error'  && <span style={{ fontSize: 12, color: 'var(--loss)' }}>{error}</span>}
+        <button onClick={() => doSave(form)} disabled={saveState === 'saving' || !dirty} style={{ padding: '8px 22px', fontSize: 13, fontWeight: 500, borderRadius: 6, border: 'none', cursor: dirty && saveState !== 'saving' ? 'pointer' : 'default', background: dirty ? 'var(--text-primary)' : 'var(--bg-elevated)', color: dirty ? 'var(--bg-base)' : 'var(--text-disabled)', transition: 'all 0.15s' }}>
+          Save review
         </button>
       </div>
       <div style={{ height: 60 }} />
