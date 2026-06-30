@@ -137,12 +137,13 @@ function FolderNav({ active, onSelect }: { active: string | null; onSelect: (id:
 
 // ─── Middle list ──────────────────────────────────────────────────────────────
 
-function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
+function MiddleList({ active, trades, pages, selectedNote, onSelect, onCreateNote }: {
   active: string | null
   trades: Trade[]
   pages: Record<string, NotebookPage>
   selectedNote: string | null
   onSelect: (note: string) => void
+  onCreateNote: (folderId: string) => void
 }) {
   if (!active) {
     return (
@@ -152,37 +153,49 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
     )
   }
 
-  // Knowledge Base
+  // Knowledge Base — note list
   const kbFolder = KB_FOLDERS.find(f => f.id === active)
   if (kbFolder) {
-    const page    = pages[kbFolder.slug]
-    const raw     = page?.content ?? ''
-    const bullets = raw.split('\n')
-      .filter(l => /^[-•*]\s/.test(l.trim()))
-      .map(l => l.trim().replace(/^[-•*]\s*/, ''))
-      .filter(Boolean).slice(0, 14)
-    const plainLines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 8)
-    const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
-    const hasContent = raw.trim().length > 0
+    const notes = Object.values(pages)
+      .filter(p => p.slug === kbFolder.id || p.slug.startsWith(kbFolder.id + '-'))
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
 
     return (
-      <div style={{ padding: '24px 0' }}>
-        <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
+      <div>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{kbFolder.label}</p>
-          {updated && <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>Updated {updated}</p>}
+          <button onClick={() => onCreateNote(kbFolder.id)}
+            style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: '2px 0' }}>
+            + New
+          </button>
         </div>
-        <div style={{ padding: '8px 20px' }}>
-          {!hasContent ? (
-            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', paddingTop: 8 }}>Nothing written yet</p>
-          ) : bullets.length > 0 ? bullets.map((b, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
-              <span style={{ color: 'var(--text-disabled)', fontSize: 12, lineHeight: '20px', flexShrink: 0 }}>·</span>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{b}</span>
-            </div>
-          )) : plainLines.map((l, i) => (
-            <p key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '3px 0', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{l}</p>
-          ))}
-        </div>
+        {notes.length === 0 ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', marginBottom: 12 }}>No notes yet</p>
+            <button onClick={() => onCreateNote(kbFolder.id)}
+              style={{ fontSize: 13, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
+              Create first note →
+            </button>
+          </div>
+        ) : notes.map(note => {
+          const on      = selectedNote === note.slug
+          const preview = (note.content ?? '').replace(/!\[[^\]]*\]\([^)]+\)/g, '').replace(/\n/g, ' ').trim().slice(0, 80)
+          const date    = new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          return (
+            <button key={note.slug} onClick={() => onSelect(note.slug)}
+              style={{ width: '100%', textAlign: 'left', padding: '12px 20px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', borderLeft: `2px solid ${on ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', transition: 'background 0.1s' }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 3 }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: on ? 'var(--text-primary)' : 'var(--text-secondary)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1, marginRight: 8 }}>
+                  {note.title || 'Untitled'}
+                </p>
+                <span style={{ fontSize: 11, color: 'var(--text-disabled)', flexShrink: 0 }}>{date}</span>
+              </div>
+              {preview && <p style={{ fontSize: 12, color: 'var(--text-disabled)', lineHeight: 1.5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{preview}</p>}
+            </button>
+          )
+        })}
       </div>
     )
   }
@@ -306,11 +319,12 @@ function extractImages(text: string): string[] {
 
 // ─── Page editor (KB + Planning) ─────────────────────────────────────────────
 
-function PageEditor({ slug, title, page, onSaved, onDeleted }: {
-  slug: string; title: string; page: NotebookPage | null
+function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSaved, onDeleted }: {
+  slug: string; title: string; editableTitle?: boolean; page: NotebookPage | null
   onSaved: (p: NotebookPage) => void
   onDeleted: (slug: string) => void
 }) {
+  const [title,       setTitle]       = useState(page?.title ?? initTitle)
   const [content,     setContent]     = useState(page?.content ?? '')
   const [saveState,   setSaveState]   = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError,   setSaveError]   = useState<string | null>(null)
@@ -319,18 +333,21 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
   const taRef      = useRef<HTMLTextAreaElement>(null)
   const fileRef    = useRef<HTMLInputElement>(null)
   const pageRef    = useRef(page)
+  const titleRef   = useRef(title)
   const editingRef = useRef(false)
   pageRef.current  = page
+  titleRef.current = title
 
-  // Reset when navigating to a different folder
+  // Reset when navigating to a different note
   useEffect(() => {
+    setTitle(page?.title ?? initTitle)
     setContent(page?.content ?? '')
     setSaveState('idle')
     setSaveError(null)
     setConfirmDel(false)
     editingRef.current = false
     if (timerRef.current) clearTimeout(timerRef.current)
-  }, [slug]) // intentionally only slug — not page?.content (avoids mid-type reset)
+  }, [slug]) // intentionally only slug — not page content (avoids mid-type reset)
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
@@ -340,15 +357,16 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaveState('error'); setSaveError('Not signed in'); return }
     const now = new Date().toISOString()
+    const t   = titleRef.current || initTitle
     let result
     if (pageRef.current?.id) {
       result = await supabase.from('notebook_pages')
-        .update({ title, content: text, updated_at: now })
+        .update({ title: t, content: text, updated_at: now })
         .eq('id', pageRef.current.id)
         .select().single()
     } else {
       result = await supabase.from('notebook_pages')
-        .insert({ user_id: user.id, slug, title, content: text, updated_at: now })
+        .insert({ user_id: user.id, slug, title: t, content: text, updated_at: now })
         .select().single()
     }
     const { data, error: err } = result
@@ -400,8 +418,21 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
   return (
     <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
+        <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
+          {editableTitle ? (
+            <input
+              value={title}
+              onChange={e => {
+                setTitle(e.target.value)
+                if (timerRef.current) clearTimeout(timerRef.current)
+                timerRef.current = setTimeout(() => doSave(content), 1500)
+              }}
+              placeholder="Note title…"
+              style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6, background: 'transparent', border: 'none', outline: 'none', width: '100%', fontFamily: 'inherit' }}
+            />
+          ) : (
+            <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
             {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
@@ -780,7 +811,14 @@ function RightPanel({ active, selectedNote, trades, pages, onSaved, onDeleted, s
   onSaved: (p: NotebookPage) => void; onDeleted: (slug: string) => void; symbol: string
 }) {
   const kbFolder = KB_FOLDERS.find(f => f.id === active)
-  if (kbFolder) return <PageEditor slug={kbFolder.slug} title={kbFolder.label} page={pages[kbFolder.slug] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
+  if (kbFolder) {
+    if (!selectedNote) return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400, gap: 12 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Select a note or create one</p>
+      </div>
+    )
+    return <PageEditor slug={selectedNote} title={pages[selectedNote]?.title ?? ''} editableTitle page={pages[selectedNote] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
+  }
 
   const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
   if (planFolder) return <PageEditor slug={planFolder.slug} title={planFolder.label} page={pages[planFolder.slug] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
@@ -836,10 +874,14 @@ export default function NotebookPage() {
 
   function handleFolderSelect(id: string) {
     setActiveFolder(id)
-    const isKb   = KB_FOLDERS.some(f => f.id === id)
     const isPlan = PLANNING_FOLDERS.some(f => f.id === id)
-    if (isKb || isPlan) setSelectedNote(id)
+    if (isPlan) setSelectedNote(id)
     else setSelectedNote(null)
+  }
+
+  function createNote(folderId: string) {
+    const newSlug = `${folderId}-${Date.now()}`
+    setSelectedNote(newSlug)
   }
 
   function handleSaved(page: NotebookPage) {
@@ -861,7 +903,7 @@ export default function NotebookPage() {
       <div style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
         {loading
           ? <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: 'var(--text-disabled)' }}>Loading…</p></div>
-          : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} />}
+          : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} onCreateNote={createNote} />}
       </div>
 
       {/* Right — content */}
