@@ -237,13 +237,179 @@ function parseOKXCSV(text: string): ParsedTrade[] {
   return trades
 }
 
+// ─── MT5 parser ──────────────────────────────────────────────────────────────
+// MT5 exports individual deals (open + close legs). We pair them FIFO per symbol.
+
+function parseMT5CSV(text: string): ParsedTrade[] {
+  const t = text.startsWith('﻿') ? text.slice(1) : text.startsWith('ï»¿') ? text.slice(3) : text
+  const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lines.length < 2) throw new Error('File appears empty.')
+
+  // Auto-detect separator
+  const sample = lines.find(l => l.includes('\t') || l.includes(';') || l.includes(',')) ?? lines[0]
+  const sep = sample.includes('\t') ? '\t'
+    : (sample.match(/;/g) || []).length >= (sample.match(/,/g) || []).length ? ';' : ','
+
+  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, '').toLowerCase().trim()
+
+  // Scan for header row — look for "symbol" + ("price" or "deal" or "ticket")
+  let headerRowIdx = -1
+  let cols: string[] = []
+  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+    const candidate = lines[i].split(sep).map(clean)
+    if (candidate.includes('symbol') && (candidate.includes('price') || candidate.includes('deal') || candidate.includes('ticket'))) {
+      headerRowIdx = i; cols = candidate; break
+    }
+  }
+  if (headerRowIdx < 0)
+    throw new Error('Cannot find an MT5 header row. Export via MetaTrader 5 → View → Terminal → Account History → right-click → Save as Report (CSV).')
+  if (cols.length > 0) cols[0] = cols[0].replace(/^[^a-z0-9]+/, '')
+
+  const find = (...names: string[]) => names.reduce((f, n) => f >= 0 ? f : cols.indexOf(n), -1)
+
+  const timeIdx       = find('time', 'date/time', 'datetime', 'date', 'close time')
+  const symbolIdx     = find('symbol', 'instrument', 'ticker', 'asset')
+  const typeIdx       = find('type', 'action', 'trans. type', 'trans type')
+  const directionIdx  = find('direction', 'dir')
+  const priceIdx      = find('price', 'deal price', 'exec price')
+  const profitIdx     = find('profit', 'pnl', 'p&l', 'gain/loss')
+  const commissionIdx = find('commission', 'comm')
+  const swapIdx       = find('swap')
+
+  if (symbolIdx < 0) throw new Error(`Cannot find a Symbol column. Detected columns: ${cols.slice(0, 8).join(', ')}`)
+  if (typeIdx < 0)   throw new Error(`Cannot find a Type (buy/sell) column. Detected columns: ${cols.slice(0, 8).join(', ')}`)
+  if (priceIdx < 0)  throw new Error(`Cannot find a Price column. Detected columns: ${cols.slice(0, 8).join(', ')}`)
+
+  interface Deal {
+    symbol: string
+    type: 'buy' | 'sell'
+    dir: 'in' | 'out' | 'in/out' | 'unknown'
+    price: number
+    netProfit: number   // profit + commission + swap for this leg
+    time: string | null
+  }
+
+  const deals: Deal[] = []
+
+  for (let i = headerRowIdx + 1; i < lines.length; i++) {
+    const cells = lines[i].split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''))
+    if (cells.length < 3) continue
+
+    const symbol = cells[symbolIdx]?.toUpperCase()?.trim()
+    if (!symbol) continue
+
+    const rawType = (cells[typeIdx] ?? '').toLowerCase().trim()
+    // Skip non-trade rows: balance deposits, credits, dividends, etc.
+    const isBuy  = rawType === 'buy' || rawType.startsWith('buy ')
+    const isSell = rawType === 'sell' || rawType.startsWith('sell ')
+    if (!isBuy && !isSell) continue
+
+    const price = parseFloat(cells[priceIdx]?.replace(/,/g, '') ?? '')
+    if (isNaN(price) || price <= 0) continue
+
+    const rawDir = directionIdx >= 0 ? (cells[directionIdx] ?? '').toLowerCase().trim() : ''
+    const dir: Deal['dir'] = rawDir === 'out' ? 'out' : rawDir === 'in/out' ? 'in/out' : rawDir === 'in' ? 'in' : 'unknown'
+
+    const profitRaw = profitIdx >= 0 ? parseFloat(cells[profitIdx]?.replace(/,/g, '') ?? '') : 0
+    const commRaw   = commissionIdx >= 0 ? parseFloat(cells[commissionIdx]?.replace(/,/g, '') ?? '') : 0
+    const swapRaw   = swapIdx >= 0 ? parseFloat(cells[swapIdx]?.replace(/,/g, '') ?? '') : 0
+    const netProfit = (isNaN(profitRaw) ? 0 : profitRaw) + (isNaN(commRaw) ? 0 : commRaw) + (isNaN(swapRaw) ? 0 : swapRaw)
+
+    deals.push({ symbol, type: isBuy ? 'buy' : 'sell', dir, price, netProfit, time: timeIdx >= 0 ? cells[timeIdx] ?? null : null })
+  }
+
+  if (deals.length === 0)
+    throw new Error('No buy/sell deal rows found. Ensure you exported Account History → Deals (not Orders or Positions).')
+
+  const hasDirectionCol = directionIdx >= 0 && deals.some(d => d.dir !== 'unknown')
+
+  const trades: ParsedTrade[] = []
+
+  if (hasDirectionCol) {
+    // Pair using Direction column: 'in' queued, 'out'/'in/out' dequeues opener
+    const openQueues = new Map<string, Deal[]>()
+    for (const deal of deals) {
+      if (deal.dir === 'in') {
+        if (!openQueues.has(deal.symbol)) openQueues.set(deal.symbol, [])
+        openQueues.get(deal.symbol)!.push(deal)
+      } else {
+        const opener = openQueues.get(deal.symbol)?.shift()
+        if (!opener) continue
+        trades.push({
+          symbol: deal.symbol,
+          direction: opener.type === 'buy' ? 'LONG' : 'SHORT',
+          entry_price: opener.price,
+          exit_price: deal.price,
+          pnl: parseFloat((opener.netProfit + deal.netProfit).toFixed(2)),
+          return_pct: null,
+          trade_date: parseTradeDate(deal.time),
+          raw_date: deal.time,
+        })
+      }
+    }
+  } else {
+    // No Direction column — infer from deal sequence: opposite type = close
+    const openBuys  = new Map<string, Deal[]>()   // waiting LONG openers
+    const openSells = new Map<string, Deal[]>()   // waiting SHORT openers
+    for (const deal of deals) {
+      if (deal.type === 'buy') {
+        const shorts = openSells.get(deal.symbol)
+        if (shorts && shorts.length > 0) {
+          const opener = shorts.shift()!
+          trades.push({
+            symbol: deal.symbol,
+            direction: 'SHORT',
+            entry_price: opener.price,
+            exit_price: deal.price,
+            pnl: parseFloat((opener.netProfit + deal.netProfit).toFixed(2)),
+            return_pct: null,
+            trade_date: parseTradeDate(deal.time),
+            raw_date: deal.time,
+          })
+        } else {
+          if (!openBuys.has(deal.symbol)) openBuys.set(deal.symbol, [])
+          openBuys.get(deal.symbol)!.push(deal)
+        }
+      } else {
+        const longs = openBuys.get(deal.symbol)
+        if (longs && longs.length > 0) {
+          const opener = longs.shift()!
+          trades.push({
+            symbol: deal.symbol,
+            direction: 'LONG',
+            entry_price: opener.price,
+            exit_price: deal.price,
+            pnl: parseFloat((opener.netProfit + deal.netProfit).toFixed(2)),
+            return_pct: null,
+            trade_date: parseTradeDate(deal.time),
+            raw_date: deal.time,
+          })
+        } else {
+          if (!openSells.has(deal.symbol)) openSells.set(deal.symbol, [])
+          openSells.get(deal.symbol)!.push(deal)
+        }
+      }
+    }
+  }
+
+  if (trades.length === 0)
+    throw new Error(
+      deals.some(d => d.dir === 'out' || d.dir === 'in/out')
+        ? 'Found closing deals but could not match them with opening deals. Try exporting a longer date range that includes the trade openings.'
+        : 'No closed trades found — all deals appear to be open positions. Export a period that includes both opening and closing deals.'
+    )
+
+  return trades
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-type Source = 'ctrader' | 'okx'
+type Source = 'ctrader' | 'okx' | 'mt5'
 
 const SOURCES: { id: Source; label: string; note: string }[] = [
   { id: 'ctrader', label: 'cTrader', note: 'Closed Positions export' },
   { id: 'okx',     label: 'OKX',     note: 'Positions History export' },
+  { id: 'mt5',     label: 'MT5',     note: 'Account History → Deals CSV' },
 ]
 
 const INSTRUCTIONS: Record<Source, { title: string; steps: string[] }> = {
@@ -263,6 +429,15 @@ const INSTRUCTIONS: Record<Source, { title: string; steps: string[] }> = {
       'Select Futures or Perpetuals tab → Positions History',
       'Set your date range and click Export / Download',
       'Upload the downloaded .csv file here',
+    ],
+  },
+  mt5: {
+    title: 'How to export from MetaTrader 5',
+    steps: [
+      'Open MT5 → View menu → Terminal (Ctrl+T)',
+      'Click the Account History tab',
+      'Right-click inside the panel → Save as Report',
+      'Choose CSV format and upload here',
     ],
   },
 }
@@ -288,7 +463,7 @@ export default function ImportPage() {
     reader.onload = e => {
       try {
         const text = e.target?.result as string
-        const parsed = source === 'okx' ? parseOKXCSV(text) : parseCTraderCSV(text)
+        const parsed = source === 'okx' ? parseOKXCSV(text) : source === 'mt5' ? parseMT5CSV(text) : parseCTraderCSV(text)
         setTrades(parsed)
         setStep('preview')
       } catch (err: any) {
