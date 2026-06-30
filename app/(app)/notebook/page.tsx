@@ -375,9 +375,8 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaveError('Not signed in'); setSaveState('error'); return }
     const ext  = file.name.split('.').pop() ?? 'png'
-    // Path must start with user.id to match the storage INSERT policy
-    const path = `${user.id}/nb-${Date.now()}.${ext}`
-    const { error: uploadErr } = await supabase.storage.from('screenshots').upload(path, file, { upsert: true })
+    const path = `${user.id}/${Date.now()}.${ext}`
+    const { error: uploadErr } = await supabase.storage.from('screenshots').upload(path, file)
     if (uploadErr) { setSaveError(`Upload failed: ${uploadErr.message}`); setSaveState('error'); return }
     const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(path)
     const insert = `\n![](${urlData.publicUrl})\n`
