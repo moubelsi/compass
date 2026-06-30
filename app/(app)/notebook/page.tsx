@@ -300,6 +300,10 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
   return null
 }
 
+function extractImages(text: string): string[] {
+  return [...text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(m => m[1])
+}
+
 // ─── Page editor (KB + Planning) ─────────────────────────────────────────────
 
 function PageEditor({ slug, title, page, onSaved, onDeleted }: {
@@ -434,8 +438,16 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
         value={content}
         onChange={e => handleChange(e.target.value)}
         placeholder={`Write your ${title.toLowerCase()} here…\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
-        style={{ flex: 1, minHeight: 440, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
+        style={{ flex: 1, minHeight: 200, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
       />
+
+      {extractImages(content).length > 0 && (
+        <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {extractImages(content).map((url, i) => (
+            <img key={i} src={url} alt="" style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--border-subtle)', display: 'block' }} />
+          ))}
+        </div>
+      )}
 
       <div style={{ paddingTop: 20, borderTop: '1px solid var(--border-subtle)', marginTop: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
         <button type="button" onClick={() => fileRef.current?.click()}
