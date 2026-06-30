@@ -156,11 +156,14 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
   const kbFolder = KB_FOLDERS.find(f => f.id === active)
   if (kbFolder) {
     const page    = pages[kbFolder.slug]
-    const bullets = (page?.content ?? '').split('\n')
+    const raw     = page?.content ?? ''
+    const bullets = raw.split('\n')
       .filter(l => /^[-•*]\s/.test(l.trim()))
       .map(l => l.trim().replace(/^[-•*]\s*/, ''))
       .filter(Boolean).slice(0, 14)
+    const plainLines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 8)
     const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null
+    const hasContent = raw.trim().length > 0
 
     return (
       <div style={{ padding: '24px 0' }}>
@@ -169,14 +172,16 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
           {updated && <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>Updated {updated}</p>}
         </div>
         <div style={{ padding: '8px 20px' }}>
-          {bullets.length > 0 ? bullets.map((b, i) => (
+          {!hasContent ? (
+            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', paddingTop: 8 }}>Nothing written yet</p>
+          ) : bullets.length > 0 ? bullets.map((b, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
               <span style={{ color: 'var(--text-disabled)', fontSize: 12, lineHeight: '20px', flexShrink: 0 }}>·</span>
               <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{b}</span>
             </div>
-          )) : (
-            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', paddingTop: 8 }}>Nothing written yet</p>
-          )}
+          )) : plainLines.map((l, i) => (
+            <p key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '3px 0', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{l}</p>
+          ))}
         </div>
       </div>
     )
@@ -306,6 +311,8 @@ function PageEditor({ slug, title, page, onSaved }: {
   const [saveError, setSaveError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const taRef    = useRef<HTMLTextAreaElement>(null)
+  const pageRef  = useRef(page)
+  pageRef.current = page
 
   useEffect(() => {
     setContent(page?.content ?? '')
@@ -317,14 +324,23 @@ function PageEditor({ slug, title, page, onSaved }: {
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
   async function doSave(text: string) {
-    if (!text.trim() && !page) return
+    if (!text.trim() && !pageRef.current) return
     setSaveState('saving')
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaveState('error'); setSaveError('Not signed in'); return }
-    const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug, title, content: text, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,slug' }
-    ).select().single()
+    const now = new Date().toISOString()
+    let result
+    if (pageRef.current?.id) {
+      result = await supabase.from('notebook_pages')
+        .update({ title, content: text, updated_at: now })
+        .eq('id', pageRef.current.id)
+        .select().single()
+    } else {
+      result = await supabase.from('notebook_pages')
+        .insert({ user_id: user.id, slug, title, content: text, updated_at: now })
+        .select().single()
+    }
+    const { data, error: err } = result
     if (err) { setSaveState('error'); setSaveError(err.message); return }
     onSaved(data as NotebookPage)
     setSaveState('saved')
@@ -423,6 +439,8 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error,     setError]     = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pageRef  = useRef(page)
+  pageRef.current = page
 
   useEffect(() => {
     const f = parseWeekly(page?.content)
@@ -458,10 +476,16 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
     setSaveState('saving'); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaveState('error'); setError('Not signed in'); return }
-    const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug: week.slug, title: `Week ${week.week} ${week.year}`, content: JSON.stringify(f), updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,slug' }
-    ).select().single()
+    const now   = new Date().toISOString()
+    const title = `Week ${week.week} ${week.year}`
+    const content = JSON.stringify(f)
+    let result
+    if (pageRef.current?.id) {
+      result = await supabase.from('notebook_pages').update({ title, content, updated_at: now }).eq('id', pageRef.current.id).select().single()
+    } else {
+      result = await supabase.from('notebook_pages').insert({ user_id: user.id, slug: week.slug, title, content, updated_at: now }).select().single()
+    }
+    const { data, error: err } = result
     if (err) { setSaveState('error'); setError(err.message); return }
     onSaved(data as NotebookPage); setSavedForm(f)
     setSaveState('saved')
@@ -584,6 +608,8 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error,     setError]     = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pageRef  = useRef(page)
+  pageRef.current = page
 
   useEffect(() => {
     const f = parseMonthly(page?.content); setForm(f); setSavedForm(f); setSaveState('idle')
@@ -604,10 +630,15 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
     setSaveState('saving'); setError(null)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaveState('error'); setError('Not signed in'); return }
-    const { data, error: err } = await supabase.from('notebook_pages').upsert(
-      { user_id: user.id, slug: month.slug, title: month.label, content: JSON.stringify(f), updated_at: new Date().toISOString() },
-      { onConflict: 'user_id,slug' }
-    ).select().single()
+    const now     = new Date().toISOString()
+    const content = JSON.stringify(f)
+    let result
+    if (pageRef.current?.id) {
+      result = await supabase.from('notebook_pages').update({ title: month.label, content, updated_at: now }).eq('id', pageRef.current.id).select().single()
+    } else {
+      result = await supabase.from('notebook_pages').insert({ user_id: user.id, slug: month.slug, title: month.label, content, updated_at: now }).select().single()
+    }
+    const { data, error: err } = result
     if (err) { setSaveState('error'); setError(err.message); return }
     onSaved(data as NotebookPage); setSavedForm(f)
     setSaveState('saved')
