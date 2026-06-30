@@ -302,24 +302,31 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect }: {
 
 // ─── Page editor (KB + Planning) ─────────────────────────────────────────────
 
-function PageEditor({ slug, title, page, onSaved }: {
+function PageEditor({ slug, title, page, onSaved, onDeleted }: {
   slug: string; title: string; page: NotebookPage | null
   onSaved: (p: NotebookPage) => void
+  onDeleted: (slug: string) => void
 }) {
-  const [content,   setContent]   = useState(page?.content ?? '')
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const taRef    = useRef<HTMLTextAreaElement>(null)
-  const pageRef  = useRef(page)
-  pageRef.current = page
+  const [content,     setContent]     = useState(page?.content ?? '')
+  const [saveState,   setSaveState]   = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveError,   setSaveError]   = useState<string | null>(null)
+  const [confirmDel,  setConfirmDel]  = useState(false)
+  const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const taRef      = useRef<HTMLTextAreaElement>(null)
+  const fileRef    = useRef<HTMLInputElement>(null)
+  const pageRef    = useRef(page)
+  const editingRef = useRef(false)
+  pageRef.current  = page
 
+  // Reset when navigating to a different folder
   useEffect(() => {
     setContent(page?.content ?? '')
     setSaveState('idle')
     setSaveError(null)
+    setConfirmDel(false)
+    editingRef.current = false
     if (timerRef.current) clearTimeout(timerRef.current)
-  }, [slug, page?.content])
+  }, [slug]) // intentionally only slug — not page?.content (avoids mid-type reset)
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
@@ -341,6 +348,7 @@ function PageEditor({ slug, title, page, onSaved }: {
         .select().single()
     }
     const { data, error: err } = result
+    editingRef.current = false
     if (err) { setSaveState('error'); setSaveError(err.message); return }
     onSaved(data as NotebookPage)
     setSaveState('saved')
@@ -348,6 +356,7 @@ function PageEditor({ slug, title, page, onSaved }: {
   }
 
   function handleChange(value: string) {
+    editingRef.current = true
     setContent(value)
     setSaveState('idle')
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -365,26 +374,57 @@ function PageEditor({ slug, title, page, onSaved }: {
     const { error: uploadErr } = await supabase.storage.from('screenshots').upload(path, file, { upsert: true })
     if (uploadErr) { setSaveError(`Upload failed: ${uploadErr.message}`); return }
     const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(path)
-    const url    = urlData.publicUrl
-    const ta     = taRef.current
-    const insert = `\n![](${url})\n`
-    const pos    = ta?.selectionStart ?? content.length
+    const insert = `\n![](${urlData.publicUrl})\n`
+    const pos    = taRef.current?.selectionStart ?? content.length
     handleChange(content.slice(0, pos) + insert + content.slice(pos))
     e.target.value = ''
+  }
+
+  async function handleDelete() {
+    if (!pageRef.current?.id) { setConfirmDel(false); setContent(''); return }
+    const { error: err } = await supabase.from('notebook_pages').delete().eq('id', pageRef.current.id)
+    if (err) { setSaveError(err.message); setConfirmDel(false); return }
+    setContent('')
+    setConfirmDel(false)
+    onDeleted(slug)
   }
 
   const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null
 
   return (
     <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
-          {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
-          {saveState === 'saved'  && <span style={{ fontSize: 12, color: 'var(--profit)' }}>Saved</span>}
-          {saveState === 'error'  && <span style={{ fontSize: 12, color: 'var(--loss)' }}>{saveError}</span>}
+      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: 6 }}>{title}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{updated ? `Updated ${updated}` : 'Not yet saved'}</p>
+            {saveState === 'saving' && <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Saving…</span>}
+            {saveState === 'saved'  && <span style={{ fontSize: 12, color: 'var(--profit)' }}>Saved</span>}
+            {saveState === 'error'  && <span style={{ fontSize: 12, color: 'var(--loss)' }}>{saveError}</span>}
+          </div>
         </div>
+        {/* Delete */}
+        {page && !confirmDel && (
+          <button type="button" onClick={() => setConfirmDel(true)}
+            style={{ fontSize: 12, color: 'var(--text-disabled)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginTop: 4 }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--loss)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-disabled)')}>
+            Delete note
+          </button>
+        )}
+        {confirmDel && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Delete this note?</span>
+            <button type="button" onClick={handleDelete}
+              style={{ fontSize: 12, color: 'var(--loss)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: 0 }}>
+              Yes, delete
+            </button>
+            <button type="button" onClick={() => setConfirmDel(false)}
+              style={{ fontSize: 12, color: 'var(--text-disabled)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 28 }} />
@@ -398,13 +438,14 @@ function PageEditor({ slug, title, page, onSaved }: {
       />
 
       <div style={{ paddingTop: 20, borderTop: '1px solid var(--border-subtle)', marginTop: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
-        <label style={{ fontSize: 12, color: 'var(--text-disabled)', cursor: 'pointer', userSelect: 'none' as const }}
+        <button type="button" onClick={() => fileRef.current?.click()}
+          style={{ fontSize: 12, color: 'var(--text-disabled)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-disabled)')}>
           ↑ Attach image
-          <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAttach} />
-        </label>
-        <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>PNG · JPG · up to 10 MB · inserted as image</span>
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAttach} />
+        <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>PNG · JPG · up to 10 MB</span>
       </div>
     </div>
   )
@@ -708,16 +749,16 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
 
 // ─── Right panel dispatcher ───────────────────────────────────────────────────
 
-function RightPanel({ active, selectedNote, trades, pages, onSaved, symbol }: {
+function RightPanel({ active, selectedNote, trades, pages, onSaved, onDeleted, symbol }: {
   active: string | null; selectedNote: string | null
   trades: Trade[]; pages: Record<string, NotebookPage>
-  onSaved: (p: NotebookPage) => void; symbol: string
+  onSaved: (p: NotebookPage) => void; onDeleted: (slug: string) => void; symbol: string
 }) {
   const kbFolder = KB_FOLDERS.find(f => f.id === active)
-  if (kbFolder) return <PageEditor slug={kbFolder.slug} title={kbFolder.label} page={pages[kbFolder.slug] ?? null} onSaved={onSaved} />
+  if (kbFolder) return <PageEditor slug={kbFolder.slug} title={kbFolder.label} page={pages[kbFolder.slug] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
 
   const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
-  if (planFolder) return <PageEditor slug={planFolder.slug} title={planFolder.label} page={pages[planFolder.slug] ?? null} onSaved={onSaved} />
+  if (planFolder) return <PageEditor slug={planFolder.slug} title={planFolder.label} page={pages[planFolder.slug] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
 
   if (active === 'weekly-recaps' && selectedNote) {
     const weeks = getWeeksForYear(new Date().getFullYear())
@@ -780,6 +821,10 @@ export default function NotebookPage() {
     setPages(prev => ({ ...prev, [page.slug]: page }))
   }
 
+  function handleDeleted(slug: string) {
+    setPages(prev => { const next = { ...prev }; delete next[slug]; return next })
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
       {/* Left — folder nav */}
@@ -796,7 +841,7 @@ export default function NotebookPage() {
 
       {/* Right — content */}
       <div style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
-        <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} symbol={symbol} />
+        <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} onDeleted={handleDeleted} symbol={symbol} />
       </div>
     </div>
   )
