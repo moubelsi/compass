@@ -371,15 +371,18 @@ function PageEditor({ slug, title, page, onSaved, onDeleted }: {
     const file = e.target.files?.[0]
     if (!file) return
     setSaveError(null)
+    setSaveState('saving')
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaveError('Not signed in'); return }
+    if (!user) { setSaveError('Not signed in'); setSaveState('error'); return }
     const ext  = file.name.split('.').pop() ?? 'png'
-    const path = `notebook/${user.id}/${Date.now()}.${ext}`
+    // Path must start with user.id to match the storage INSERT policy
+    const path = `${user.id}/nb-${Date.now()}.${ext}`
     const { error: uploadErr } = await supabase.storage.from('screenshots').upload(path, file, { upsert: true })
-    if (uploadErr) { setSaveError(`Upload failed: ${uploadErr.message}`); return }
+    if (uploadErr) { setSaveError(`Upload failed: ${uploadErr.message}`); setSaveState('error'); return }
     const { data: urlData } = supabase.storage.from('screenshots').getPublicUrl(path)
     const insert = `\n![](${urlData.publicUrl})\n`
     const pos    = taRef.current?.selectionStart ?? content.length
+    setSaveState('idle')
     handleChange(content.slice(0, pos) + insert + content.slice(pos))
     e.target.value = ''
   }
