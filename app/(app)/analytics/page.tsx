@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence')
+        .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence, followed_plan, notes, screenshot_url')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
       setAllTrades(data || [])
@@ -264,6 +264,24 @@ export default function AnalyticsPage() {
     { label: 'Mid',  range: '5–7',  group: confTrades.filter(t => Number(t.confidence) >= 5 && Number(t.confidence) <= 7) },
     { label: 'High', range: '8–10', group: confTrades.filter(t => Number(t.confidence) >= 8) },
   ].map(b => ({ ...b, ...bStats(b.group) }))
+
+  // Discipline
+  const followedPct    = totalTrades > 0 ? trades.filter(t => t.followed_plan).length / totalTrades : 0
+  const avgConf        = confTrades.length > 0 ? confTrades.reduce((s: number, t: any) => s + Number(t.confidence), 0) / confTrades.length : 0
+  const typedTrades    = [...planned, ...impulsive]
+  const plannedPct     = typedTrades.length > 0 ? planned.length / typedTrades.length : 0
+  const journalPct     = totalTrades > 0 ? trades.filter(t => (t.notes && t.notes !== 'EMPTY') || (t.screenshot_url && t.screenshot_url !== 'EMPTY')).length / totalTrades : 0
+  const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalPct * 10) : null
+  const discColor      = disciplineScore == null ? 'var(--text-primary)' : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
+  const insightText    = (() => {
+    if (totalTrades === 0) return 'Log your first trade to unlock performance insights.'
+    if (planned.length + impulsive.length === 0)
+      return `${totalTrades} trades logged. Tag trade type to unlock behaviour analysis.`
+    const pWR = planned.length > 0   ? (planned.filter((t: any) => Number(t.pnl) > 0).length / planned.length * 100).toFixed(0) : null
+    const iWR = impulsive.length > 0  ? (impulsive.filter((t: any) => Number(t.pnl) > 0).length / impulsive.length * 100).toFixed(0) : null
+    if (pWR && iWR) return `Planned ${pWR}% WR (${planned.length}) vs Impulsive ${iWR}% WR (${impulsive.length}).`
+    return `${planned.length + impulsive.length} of ${totalTrades} trades have type logged.`
+  })()
 
   const chartShared = {
     cartesian: <CartesianGrid strokeDasharray="0" stroke="var(--border-subtle)" vertical={false} />,
@@ -601,6 +619,35 @@ export default function AnalyticsPage() {
             )}
           </div>
         )}
+
+        {/* Discipline */}
+        <div>
+          <SectionHeader title="Discipline" sub="Plan adherence and consistency score" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+            <StatCard
+              label="Discipline score"
+              value={disciplineScore !== null ? String(disciplineScore) : '—'}
+              sub="Plan · Follow · Confidence · Journal"
+              color={discColor}
+            />
+            <StatCard
+              label="Followed plan"
+              value={totalTrades > 0 ? `${Math.round(followedPct * 100)}%` : '—'}
+              sub={`${trades.filter((t: any) => t.followed_plan).length} of ${totalTrades} trades`}
+              color={followedPct >= 0.8 ? 'var(--profit)' : followedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)'}
+            />
+            <StatCard
+              label="Planned trades"
+              value={totalTrades > 0 ? `${Math.round(plannedPct * 100)}%` : '—'}
+              sub={`${planned.length} planned · ${impulsive.length} impulsive`}
+              color={plannedPct >= 0.8 ? 'var(--profit)' : plannedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)'}
+            />
+          </div>
+          <div className="card" style={{ padding: '18px 20px', borderLeft: '2px solid var(--ai-accent)' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 7 }}>Compass Insight</p>
+            <p style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-secondary)' }}>{insightText}</p>
+          </div>
+        </div>
 
         <div style={{ height: 8 }} />
       </div>

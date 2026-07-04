@@ -389,7 +389,7 @@ export default function DashboardPage() {
     if (l) setDailyLimit(parseInt(l))
 
     supabase.from('trades')
-      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type, followed_plan, confidence, notes, screenshot_url')
+      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .then(({ data }) => { setTrades(data || []); setLoading(false) })
@@ -415,15 +415,6 @@ export default function DashboardPage() {
     else break
   }
 
-  // ── Discipline ──
-  const typedTrades = trades.filter(t => t.trade_type)
-  const plannedPct  = typedTrades.length > 0 ? typedTrades.filter(t => t.trade_type === 'planned').length / typedTrades.length : 0
-  const followedPct = totalTrades > 0 ? trades.filter(t => t.followed_plan).length / totalTrades : 0
-  const confTrades  = trades.filter(t => t.confidence != null)
-  const avgConf     = confTrades.length > 0 ? confTrades.reduce((s, t) => s + Number(t.confidence), 0) / confTrades.length : 0
-  const journalPct  = totalTrades > 0 ? trades.filter(t => (t.notes && t.notes !== 'EMPTY') || (t.screenshot_url && t.screenshot_url !== 'EMPTY')).length / totalTrades : 0
-  const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalPct * 10) : null
-  const discColor   = disciplineScore == null ? 'var(--text-primary)' : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
 
   // ── Today ──
   const todayStr    = new Date().toDateString()
@@ -450,18 +441,6 @@ export default function DashboardPage() {
     return acc
   }, [])
 
-  // ── Insight ──
-  const insightText = (() => {
-    if (totalTrades === 0) return 'Log your first trade to unlock performance insights.'
-    const planned   = trades.filter(t => t.trade_type === 'planned')
-    const impulsive = trades.filter(t => t.trade_type === 'impulsive')
-    if (planned.length + impulsive.length === 0)
-      return `${totalTrades} trades logged. Tag trade type to unlock behaviour analysis.`
-    const pWR = planned.length > 0   ? (planned.filter(t  => Number(t.pnl) > 0).length / planned.length   * 100).toFixed(0) : null
-    const iWR = impulsive.length > 0  ? (impulsive.filter(t => Number(t.pnl) > 0).length / impulsive.length * 100).toFixed(0) : null
-    if (pWR && iWR) return `Planned ${pWR}% WR (${planned.length}) vs Impulsive ${iWR}% WR (${impulsive.length}).`
-    return `${planned.length + impulsive.length} of ${totalTrades} trades have type logged.`
-  })()
 
   // ── Weekly goal ──
   const now    = new Date()
@@ -522,8 +501,6 @@ export default function DashboardPage() {
                   { label: 'Trades',         value: String(totalTrades),          color: 'var(--text-primary)' },
                   { label: 'Profit factor',  value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
                   { label: 'Streak',         value: currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'}` : '—', color: currentStreak > 0 ? (streakIsWin ? 'var(--profit)' : 'var(--loss)') : 'var(--text-primary)' },
-                  { label: 'Followed plan',  value: totalTrades > 0 ? `${Math.round(followedPct * 100)}%` : '—', color: followedPct >= 0.8 ? 'var(--profit)' : followedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)' },
-                  { label: 'Discipline',     value: disciplineScore !== null ? String(disciplineScore) : '—', color: discColor },
                 ].map((s, i, arr) => (
                   <div key={s.label} style={{ display: 'flex', alignItems: 'center' }}>
                     <div style={{ padding: '0 20px', borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', ...(i === 0 ? { paddingLeft: 0 } : {}) }}>
@@ -546,7 +523,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
         {/* Today strip */}
         {todayTrades.length > 0 && (
@@ -567,12 +544,15 @@ export default function DashboardPage() {
 
         {/* Equity curve */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Equity curve</p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 2 }}>Equity curve</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cumulative % return per trade</p>
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ display: 'flex', gap: 2 }}>
+              <div style={{ display: 'flex', gap: 4 }}>
                 {PERIODS.map(p => (
-                  <button key={p} onClick={() => setPeriod(p)} style={{ padding: '3px 10px', borderRadius: 4, fontSize: 11, fontWeight: 500, cursor: 'pointer', background: period === p ? 'var(--bg-overlay)' : 'transparent', color: period === p ? 'var(--text-primary)' : 'var(--text-muted)', border: period === p ? '1px solid var(--border-default)' : '1px solid transparent', transition: 'all 0.1s' }}>
+                  <button key={p} onClick={() => setPeriod(p)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer', background: period === p ? 'var(--bg-overlay)' : 'transparent', color: period === p ? 'var(--text-primary)' : 'var(--text-muted)', border: `1px solid ${period === p ? 'var(--border-default)' : 'transparent'}`, transition: 'all 0.1s' }}>
                     {p}
                   </button>
                 ))}
@@ -582,9 +562,9 @@ export default function DashboardPage() {
               </Link>
             </div>
           </div>
-          <div className="card" style={{ padding: '28px 24px 12px', height: 340 }}>
+          <div className="card" style={{ padding: '20px 16px 10px', height: 320 }}>
             {equityData.length > 1 ? (
-              <EquityCurve data={equityData} />
+              <EquityCurve data={equityData} currencySymbol={symbol} />
             ) : (
               <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <p style={{ fontSize: 14, color: 'var(--text-secondary)', fontWeight: 500 }}>No equity data yet</p>
@@ -725,10 +705,6 @@ export default function DashboardPage() {
 
           {/* Insight + Coach */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="card" style={{ padding: '18px 20px', borderLeft: '2px solid var(--ai-accent)', flex: 1 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 7 }}>Compass Insight</p>
-              <p style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-secondary)' }}>{insightText}</p>
-            </div>
             <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>AI Coach</p>
