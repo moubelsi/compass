@@ -39,8 +39,10 @@ export function EquityCurve({ data, currencySymbol = '$' }: { data: DataPoint[];
   const color = isUp ? 'var(--profit)' : 'var(--loss)'
   const minVal = data.reduce((m, d) => Math.min(m, d.value), 0)
   const maxVal = data.reduce((m, d) => Math.max(m, d.value), 0)
-  const yMin = Math.floor(minVal / 10) * 10
-  const yMax = Math.ceil(maxVal / 10) * 10
+  // Proportional headroom so small ranges still fill the chart; floor keeps a flat series from collapsing to a zero-span domain
+  const pad = Math.max((maxVal - minVal) * 0.12, 0.5)
+  const yMin = Math.floor((minVal - pad) * 10) / 10
+  const yMax = Math.ceil((maxVal + pad) * 10) / 10
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>

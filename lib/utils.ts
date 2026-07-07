@@ -17,3 +17,8 @@ export function getPnlColor(v: number) {
   if (v < 0) return 'var(--loss)'
   return 'var(--text-secondary)'
 }
+
+/** True when an optional text field holds real content — 'EMPTY' is a legacy DB sentinel for no content */
+export function hasContent(v?: string | null): v is string {
+  return !!v && v !== 'EMPTY'
+}

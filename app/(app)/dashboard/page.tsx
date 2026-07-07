@@ -389,7 +389,7 @@ export default function DashboardPage() {
     if (l) setDailyLimit(parseInt(l))
 
     supabase.from('trades')
-      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, trade_type')
+      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .then(({ data }) => { setTrades(data || []); setLoading(false) })
@@ -415,7 +415,6 @@ export default function DashboardPage() {
     else break
   }
 
-
   // ── Today ──
   const todayStr    = new Date().toDateString()
   const todayTrades = trades.filter(t => new Date(t.trade_date || t.created_at).toDateString() === todayStr)
@@ -440,7 +439,6 @@ export default function DashboardPage() {
     })
     return acc
   }, [])
-
 
   // ── Weekly goal ──
   const now    = new Date()

@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Sparkles, ChevronDown, ChevronUp } from 'luc
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip as RTooltip } from 'recharts'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency, localDateStr } from '@/lib/utils'
+import { formatCurrency, localDateStr, hasContent } from '@/lib/utils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ function ExpandableTradeRow({ trade, symbol }: { trade: any; symbol: string }) {
         onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
       >
         {/* Screenshot thumbnail */}
-        {trade.screenshot_url && trade.screenshot_url !== 'EMPTY' ? (
+        {hasContent(trade.screenshot_url) ? (
           <img src={trade.screenshot_url} alt="" style={{ width: 44, height: 28, borderRadius: 4, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border-subtle)' }} />
         ) : (
           <div style={{ width: 30, height: 30, borderRadius: 6, background: isWin ? 'var(--profit-dim)' : 'var(--loss-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -197,7 +197,7 @@ function ExpandableTradeRow({ trade, symbol }: { trade: any; symbol: string }) {
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{trade.notes}</p>
             </div>
           )}
-          {trade.screenshot_url && trade.screenshot_url !== 'EMPTY' && (
+          {hasContent(trade.screenshot_url) && (
             <a href={`/trades/${trade.id}`} style={{ display: 'block', textDecoration: 'none' }}>
               <img src={trade.screenshot_url} alt="Screenshot" style={{ width: '100%', borderRadius: 7, border: '1px solid var(--border-subtle)', display: 'block' }} />
             </a>

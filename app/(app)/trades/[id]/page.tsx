@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, hasContent } from '@/lib/utils'
 
 function Row({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
@@ -222,7 +222,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Notes + Screenshot */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {trade.notes && trade.notes !== 'EMPTY' && (
+            {hasContent(trade.notes) && (
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <FileText size={15} style={{ color: 'var(--text-muted)' }} />
@@ -232,7 +232,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
 
-            {trade.screenshot_url && trade.screenshot_url !== 'EMPTY' && (
+            {hasContent(trade.screenshot_url) && (
               <div className="card" style={{ padding: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <ImageIcon size={15} style={{ color: 'var(--text-muted)' }} />

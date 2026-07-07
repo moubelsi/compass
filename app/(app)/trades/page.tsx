@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Search, SlidersHorizontal, Upload, Star, Zap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency, localDateStr } from '@/lib/utils'
+import { formatCurrency, localDateStr, hasContent } from '@/lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -343,7 +343,7 @@ export default function TradesPage() {
 
                       {/* Symbol */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {t.screenshot_url && t.screenshot_url !== 'EMPTY' ? (
+                        {hasContent(t.screenshot_url) ? (
                           <img src={t.screenshot_url} alt="" style={{ width: 52, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--border-subtle)' }} />
                         ) : (
                           <div style={{ width: 32, height: 32, borderRadius: 7, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

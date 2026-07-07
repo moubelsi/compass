@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
 import { useCurrency } from '@/lib/useCurrency'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, hasContent } from '@/lib/utils'
 import { TagInput } from '@/components/ui/TagInput'
 
 const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
@@ -107,7 +107,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           is_favourite: data.is_favourite || false,
         })
         const url = data.screenshot_url
-        if (url && url !== 'EMPTY') setExistingScreenshot(url)
+        if (hasContent(url)) setExistingScreenshot(url)
         setOrigReturnPct(data.return_pct ?? null)
         setOrigRR(data.rr ?? null)
       }

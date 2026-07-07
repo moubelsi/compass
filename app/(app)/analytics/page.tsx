@@ -7,6 +7,7 @@ import { CalendarHeatmap } from '@/components/charts/CalendarHeatmap'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency } from '@/lib/utils'
+import { computeDiscipline } from '@/lib/discipline'
 
 // Shape helpers replacing deprecated <Cell> — color each bar based on its value
 function pnlBarShape(props: any) {
@@ -266,21 +267,17 @@ export default function AnalyticsPage() {
   ].map(b => ({ ...b, ...bStats(b.group) }))
 
   // Discipline
-  const followedPct    = totalTrades > 0 ? trades.filter(t => t.followed_plan).length / totalTrades : 0
-  const avgConf        = confTrades.length > 0 ? confTrades.reduce((s: number, t: any) => s + Number(t.confidence), 0) / confTrades.length : 0
-  const typedTrades    = [...planned, ...impulsive]
-  const plannedPct     = typedTrades.length > 0 ? planned.length / typedTrades.length : 0
-  const journalPct     = totalTrades > 0 ? trades.filter(t => (t.notes && t.notes !== 'EMPTY') || (t.screenshot_url && t.screenshot_url !== 'EMPTY')).length / totalTrades : 0
-  const disciplineScore = totalTrades > 0 ? Math.round(plannedPct * 40 + followedPct * 30 + (avgConf / 10) * 20 + journalPct * 10) : null
-  const discColor      = disciplineScore == null ? 'var(--text-primary)' : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
-  const insightText    = (() => {
-    if (totalTrades === 0) return 'Log your first trade to unlock performance insights.'
-    if (planned.length + impulsive.length === 0)
-      return `${totalTrades} trades logged. Tag trade type to unlock behaviour analysis.`
-    const pWR = planned.length > 0   ? (planned.filter((t: any) => Number(t.pnl) > 0).length / planned.length * 100).toFixed(0) : null
-    const iWR = impulsive.length > 0  ? (impulsive.filter((t: any) => Number(t.pnl) > 0).length / impulsive.length * 100).toFixed(0) : null
-    if (pWR && iWR) return `Planned ${pWR}% WR (${planned.length}) vs Impulsive ${iWR}% WR (${impulsive.length}).`
-    return `${planned.length + impulsive.length} of ${totalTrades} trades have type logged.`
+  const disc            = computeDiscipline(trades)
+  const disciplineScore = disc.score
+  const discColor       = disciplineScore == null ? 'var(--text-primary)' : disciplineScore >= 70 ? 'var(--profit)' : disciplineScore >= 40 ? '#B45309' : 'var(--loss)'
+  const pctColor        = (pct: number) => totalTrades === 0 ? 'var(--text-primary)' : pct >= 0.8 ? 'var(--profit)' : pct >= 0.5 ? '#B45309' : 'var(--loss)'
+  const insightText     = (() => {
+    if (allTrades.length === 0) return 'Log your first trade to unlock performance insights.'
+    if (totalTrades === 0) return 'No trades in this period. Pick a wider range to see insights.'
+    if (!hasBehaviourData) return `${totalTrades} trades logged. Tag trade type to unlock behaviour analysis.`
+    if (planned.length > 0 && impulsive.length > 0)
+      return `Planned ${plannedStats.winRate.toFixed(0)}% WR (${planned.length}) vs Impulsive ${impulsiveStats.winRate.toFixed(0)}% WR (${impulsive.length}).`
+    return `${disc.typedCount} of ${totalTrades} trades have type logged.`
   })()
 
   const chartShared = {
@@ -632,15 +629,15 @@ export default function AnalyticsPage() {
             />
             <StatCard
               label="Followed plan"
-              value={totalTrades > 0 ? `${Math.round(followedPct * 100)}%` : '—'}
-              sub={`${trades.filter((t: any) => t.followed_plan).length} of ${totalTrades} trades`}
-              color={followedPct >= 0.8 ? 'var(--profit)' : followedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)'}
+              value={totalTrades > 0 ? `${Math.round(disc.followedPct * 100)}%` : '—'}
+              sub={`${disc.followedCount} of ${totalTrades} trades`}
+              color={pctColor(disc.followedPct)}
             />
             <StatCard
               label="Planned trades"
-              value={totalTrades > 0 ? `${Math.round(plannedPct * 100)}%` : '—'}
+              value={totalTrades > 0 ? `${Math.round(disc.plannedPct * 100)}%` : '—'}
               sub={`${planned.length} planned · ${impulsive.length} impulsive`}
-              color={plannedPct >= 0.8 ? 'var(--profit)' : plannedPct >= 0.5 ? '#B45309' : totalTrades > 0 ? 'var(--loss)' : 'var(--text-primary)'}
+              color={pctColor(disc.plannedPct)}
             />
           </div>
           <div className="card" style={{ padding: '18px 20px', borderLeft: '2px solid var(--ai-accent)' }}>
