@@ -209,19 +209,26 @@ function MobileBottomNav() {
  * localStorage across tabs), fire-and-forget, fully silent — imported
  * trades simply appear on the next data fetch. Not-connected users cost
  * one cheap 404 per interval.
+ *
+ * Module-level guard instead of effect cleanup: StrictMode's dev
+ * mount/unmount/remount would otherwise cancel the first run and
+ * throttle-skip the second, so no sync would ever fire in dev.
  */
+let autoSyncStarted = false
+
 function useBrokerAutoSync() {
   useEffect(() => {
+    if (autoSyncStarted) return
     const KEY = 'broker_last_auto_sync'
     const last = Number(localStorage.getItem(KEY) || 0)
     if (Date.now() - last < 5 * 60 * 1000) return
+    autoSyncStarted = true
     localStorage.setItem(KEY, String(Date.now()))
 
-    let cancelled = false
     ;(async () => {
       try {
         // Resumable batches: keep requesting until the API reports done
-        for (let i = 0; i < 20 && !cancelled; i++) {
+        for (let i = 0; i < 20; i++) {
           const res = await fetch('/api/ctrader/sync', { method: 'POST' })
           if (!res.ok) return
           const data = await res.json()
@@ -229,7 +236,6 @@ function useBrokerAutoSync() {
         }
       } catch { /* silent by design — the manual Sync Now button surfaces errors */ }
     })()
-    return () => { cancelled = true }
   }, [])
 }
 

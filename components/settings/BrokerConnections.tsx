@@ -71,6 +71,9 @@ export function BrokerConnections() {
   }, [load])
 
   const runSyncLoop = useCallback(async (first: '/api/ctrader/sync' | '/api/ctrader/import') => {
+    // Reset here: React StrictMode's dev mount/unmount/remount leaves the ref
+    // true from the first cleanup, which would silently skip the whole loop
+    cancelled.current = false
     setSyncing(true)
     setError('')
     setSyncMsg('Syncing…')
