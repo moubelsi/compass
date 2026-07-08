@@ -20,9 +20,11 @@ export const PT = {
   ASSET_LIST_REQ: 2112,
   SYMBOLS_LIST_REQ: 2114,
   TRADER_REQ: 2121,
+  RECONCILE_REQ: 2124,
   DEAL_LIST_REQ: 2133,
   OA_ERROR_RES: 2142,
   GET_ACCOUNTS_BY_TOKEN_REQ: 2149,
+  DEAL_LIST_BY_POSITION_ID_REQ: 2178,
 } as const
 
 interface Envelope {
@@ -146,9 +148,21 @@ export class CTraderSession {
     return res.symbol ?? []
   }
 
-  /** Closed/executed deals in [fromTimestamp, toTimestamp] (ms since epoch). */
-  async getDeals(ctidTraderAccountId: number, fromTimestamp: number, toTimestamp: number): Promise<Array<Record<string, any>>> {
-    const res = await this.request(PT.DEAL_LIST_REQ, { ctidTraderAccountId, fromTimestamp, toTimestamp }, 30_000)
+  /** Executed deals in [fromTimestamp, toTimestamp] (ms since epoch, max 1 week apart). */
+  async getDeals(ctidTraderAccountId: number, fromTimestamp: number, toTimestamp: number, maxRows = 500): Promise<Array<Record<string, any>>> {
+    const res = await this.request(PT.DEAL_LIST_REQ, { ctidTraderAccountId, fromTimestamp, toTimestamp, maxRows }, 30_000)
     return res.deal ?? []
+  }
+
+  /** Every deal belonging to one position — used when a position's legs span the scan window. */
+  async getDealsByPosition(ctidTraderAccountId: number, positionId: number): Promise<Array<Record<string, any>>> {
+    const res = await this.request(PT.DEAL_LIST_BY_POSITION_ID_REQ, { ctidTraderAccountId, positionId }, 30_000)
+    return res.deal ?? []
+  }
+
+  /** Currently open positions — their ids are excluded from import until fully closed. */
+  async getOpenPositionIds(ctidTraderAccountId: number): Promise<Set<number>> {
+    const res = await this.request(PT.RECONCILE_REQ, { ctidTraderAccountId }, 30_000)
+    return new Set((res.position ?? []).map((p: Record<string, any>) => Number(p.positionId)))
   }
 }
