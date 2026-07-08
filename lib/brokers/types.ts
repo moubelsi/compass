@@ -48,12 +48,25 @@ export interface NormalizedTrade {
   raw_import_data: unknown
 }
 
+/** Diagnostic counters filled during an import pass — used by the dry-run endpoint. */
+export interface ImportStats {
+  windows_scanned: number
+  deals_seen: number
+  positions_seen: number
+  skipped_still_open: number
+  skipped_no_close_legs: number
+  skipped_incomplete_chain: number
+  trades_built: number
+  incomplete_position_ids: number[]
+}
+
 export interface ImportBatch {
   trades: NormalizedTrade[]
   /** New high-water mark (ms since epoch) to persist as last_deal_timestamp */
   cursor: number
   /** False when the time budget ran out and the caller should invoke again */
   done: boolean
+  stats: ImportStats
 }
 
 export interface BrokerProvider {

@@ -1,5 +1,5 @@
 import { CTraderSession } from './client'
-import type { ImportBatch, NormalizedTrade } from '../types'
+import type { ImportBatch, ImportStats, NormalizedTrade } from '../types'
 
 /**
  * Reconstructs closed trades from cTrader deals.
@@ -143,6 +143,11 @@ export async function importClosedTrades(args: {
     const byPosition = new Map<number, Array<Record<string, any>>>()
     let cursor = from
     let done = true
+    const stats: ImportStats = {
+      windows_scanned: 0, deals_seen: 0, positions_seen: 0,
+      skipped_still_open: 0, skipped_no_close_legs: 0, skipped_incomplete_chain: 0,
+      trades_built: 0, incomplete_position_ids: [],
+    }
 
     while (from < now) {
       if (Date.now() > deadlineMs) { done = false; break }
@@ -166,15 +171,18 @@ export async function importClosedTrades(args: {
         pageFrom = Math.max(...deals.map(d => Number(d.executionTimestamp)))
       }
 
+      stats.windows_scanned++
+      stats.deals_seen += seen.size
       cursor = to
       from = to
     }
 
     const trades: NormalizedTrade[] = []
     for (const [positionId, deals] of byPosition) {
-      if (openPositionIds.has(positionId)) continue
+      stats.positions_seen++
+      if (openPositionIds.has(positionId)) { stats.skipped_still_open++; continue }
       const closes = deals.filter(d => d.closePositionDetail && isExecuted(d))
-      if (closes.length === 0) continue
+      if (closes.length === 0) { stats.skipped_no_close_legs++; continue }
 
       let chain = deals
       const openedVolume = deals.filter(d => !d.closePositionDetail && isExecuted(d)).reduce((s, d) => s + executedVolume(d), 0)
@@ -186,10 +194,16 @@ export async function importClosedTrades(args: {
       }
 
       const trade = buildTradeFromDeals(positionId, chain, symbolName)
-      if (trade) trades.push(trade)
+      if (trade) {
+        trades.push(trade)
+        stats.trades_built++
+      } else {
+        stats.skipped_incomplete_chain++
+        if (stats.incomplete_position_ids.length < 20) stats.incomplete_position_ids.push(positionId)
+      }
     }
 
-    return { trades, cursor, done }
+    return { trades, cursor, done, stats }
   } finally {
     session.close()
   }
