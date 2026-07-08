@@ -1,4 +1,4 @@
-import { CTraderSession } from './client'
+import { CTraderSession, type CTraderApiError } from './client'
 import type { ImportBatch, ImportStats, NormalizedTrade } from '../types'
 
 /**
@@ -20,9 +20,29 @@ import type { ImportBatch, ImportStats, NormalizedTrade } from '../types'
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_ROWS = 500
 /** Historical requests are throttled by the API — keep a polite spacing. */
-const REQUEST_SPACING_MS = 130
+const REQUEST_SPACING_MS = 250
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+function isRateLimit(e: unknown): boolean {
+  const err = e as CTraderApiError
+  const text = `${err?.errorCode ?? ''} ${err?.message ?? ''}`.toLowerCase()
+  return /frequen|rate|blocked|too many|throttl/.test(text)
+}
+
+/** Retries rate-limited requests with exponential backoff (1s → 8s). */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let delay = 1000
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (attempt >= 4 || !isRateLimit(e)) throw e
+      await sleep(delay)
+      delay *= 2
+    }
+  }
+}
 
 function isExecuted(deal: Record<string, any>): boolean {
   const status = String(deal.dealStatus ?? 'FILLED').toUpperCase()
@@ -188,7 +208,7 @@ export async function importClosedTrades(args: {
       const seen = new Set<string>()
       for (;;) {
         await sleep(REQUEST_SPACING_MS)
-        const deals = await session.getDeals(ctid, pageFrom, to, MAX_ROWS)
+        const deals = await withRetry(() => session.getDeals(ctid, pageFrom, to, MAX_ROWS))
         for (const d of deals) {
           const key = String(d.dealId)
           if (seen.has(key)) continue
@@ -221,7 +241,7 @@ export async function importClosedTrades(args: {
         // Opening legs precede the scan window — fetch the position's full chain
         await sleep(REQUEST_SPACING_MS)
         try {
-          chain = await session.getDealsByPosition(ctid, positionId)
+          chain = await withRetry(() => session.getDealsByPosition(ctid, positionId))
         } catch {
           // Keep the close legs — buildTradeFromDeals falls back to closePositionDetail
           stats.chain_fetch_failures++

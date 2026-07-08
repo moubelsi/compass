@@ -72,7 +72,10 @@ export async function POST() {
   } catch (e) {
     if (e instanceof ReauthRequiredError) return NextResponse.json({ error: 'reauth_required', message: e.message }, { status: 401 })
     if (e instanceof NoAccountSelectedError) return NextResponse.json({ error: 'no_account_selected', message: e.message }, { status: 400 })
-    const msg = e instanceof Error ? e.message : 'Sync failed.'
+    const raw = e instanceof Error ? e.message : 'Sync failed.'
+    const msg = /frequen|rate|blocked|too many|throttl/i.test(raw)
+      ? 'cTrader is rate limiting requests. Wait a minute, then press Sync now — progress is saved.'
+      : raw
     return NextResponse.json({ error: msg }, { status: 502 })
   }
 }
