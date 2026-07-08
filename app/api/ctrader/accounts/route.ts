@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const cached = conn.account_info
     const fresh = cached?.fetched_at && Date.now() - new Date(cached.fetched_at).getTime() < CACHE_TTL_MS
     if (fresh && cached?.accounts && !req.nextUrl.searchParams.get('refresh')) {
-      return NextResponse.json({ accounts: cached.accounts, selected: conn.broker_account_id })
+      return NextResponse.json({ accounts: cached.accounts, selected: conn.broker_account_id, last_synced_at: conn.last_synced_at })
     }
 
     const accounts = await getProvider('ctrader').listAccounts(conn.access_token)
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       .update({ account_info: { accounts, fetched_at: new Date().toISOString() }, updated_at: new Date().toISOString() })
       .eq('id', conn.id)
 
-    return NextResponse.json({ accounts, selected: conn.broker_account_id })
+    return NextResponse.json({ accounts, selected: conn.broker_account_id, last_synced_at: conn.last_synced_at })
   } catch (e) {
     if (e instanceof ReauthRequiredError) return NextResponse.json({ error: 'reauth_required', message: e.message }, { status: 401 })
     const msg = e instanceof Error ? e.message : 'Failed to load accounts.'

@@ -275,3 +275,7 @@ body {
   --journal-ivory-dark: #231F1B;
   --journal-ink:        #E8DDD8;
 }
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}

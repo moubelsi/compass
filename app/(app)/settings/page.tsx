@@ -5,6 +5,7 @@ import { Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useCurrency, CURRENCY_OPTIONS } from '@/lib/useCurrency'
 import { formatCurrency } from '@/lib/utils'
+import { BrokerConnections } from '@/components/settings/BrokerConnections'
 
 export default function SettingsPage() {
   const { symbol, setCurrency }         = useCurrency()
@@ -156,6 +157,9 @@ export default function SettingsPage() {
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Applies to P&L values across the app.</p>
           </div>
         </div>
+
+        {/* Broker connections */}
+        <BrokerConnections />
 
         {/* Export */}
         <div className="card" style={{ padding: 28 }}>

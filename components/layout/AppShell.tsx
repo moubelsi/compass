@@ -204,8 +204,38 @@ function MobileBottomNav() {
   )
 }
 
+/**
+ * Background broker sync: at most once per 5 minutes (tracked in
+ * localStorage across tabs), fire-and-forget, fully silent — imported
+ * trades simply appear on the next data fetch. Not-connected users cost
+ * one cheap 404 per interval.
+ */
+function useBrokerAutoSync() {
+  useEffect(() => {
+    const KEY = 'broker_last_auto_sync'
+    const last = Number(localStorage.getItem(KEY) || 0)
+    if (Date.now() - last < 5 * 60 * 1000) return
+    localStorage.setItem(KEY, String(Date.now()))
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        // Resumable batches: keep requesting until the API reports done
+        for (let i = 0; i < 20 && !cancelled; i++) {
+          const res = await fetch('/api/ctrader/sync', { method: 'POST' })
+          if (!res.ok) return
+          const data = await res.json()
+          if (data.done) return
+        }
+      } catch { /* silent by design — the manual Sync Now button surfaces errors */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { dark, toggle } = useDarkMode()
+  useBrokerAutoSync()
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       <Sidebar dark={dark} onToggleDark={toggle} />
