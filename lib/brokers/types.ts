@@ -44,6 +44,8 @@ export interface NormalizedTrade {
     open_time: string  // ISO
     close_time: string // ISO
     duration_ms: number
+    /** 'deals' = entry from actual opening legs; 'close_detail' = entry from closePositionDetail */
+    entry_source: 'deals' | 'close_detail'
   }
   raw_import_data: unknown
 }
@@ -56,6 +58,7 @@ export interface ImportStats {
   skipped_still_open: number
   skipped_no_close_legs: number
   skipped_incomplete_chain: number
+  chain_fetch_failures: number
   trades_built: number
   incomplete_position_ids: number[]
 }

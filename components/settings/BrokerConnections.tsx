@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RefreshCw, Link2, Unlink } from 'lucide-react'
+import { RefreshCw, History, Link2, Unlink } from 'lucide-react'
 
 interface BrokerAccountView {
   id: string
@@ -70,15 +70,18 @@ export function BrokerConnections() {
     return () => { cancelled.current = true }
   }, [load])
 
-  const syncNow = useCallback(async () => {
+  const runSyncLoop = useCallback(async (first: '/api/ctrader/sync' | '/api/ctrader/import') => {
     setSyncing(true)
     setError('')
     setSyncMsg('Syncing…')
     let imported = 0
     try {
-      // The API imports in resumable batches; keep going until it reports done
-      for (let i = 0; i < 60 && !cancelled.current; i++) {
-        const res = await fetch('/api/ctrader/sync', { method: 'POST' })
+      // The API imports in resumable batches; the first request may rewind
+      // (full import), every continuation goes through the incremental route
+      let endpoint = first
+      for (let i = 0; i < 120 && !cancelled.current; i++) {
+        const res = await fetch(endpoint, { method: 'POST' })
+        endpoint = '/api/ctrader/sync'
         const data = await res.json().catch(() => ({}))
         if (res.status === 401) { setStatus('reauth'); setSyncMsg(''); return }
         if (!res.ok) { setError(data.message || data.error || 'Sync failed.'); setSyncMsg(''); return }
@@ -95,6 +98,13 @@ export function BrokerConnections() {
       setSyncing(false)
     }
   }, [])
+
+  const syncNow = useCallback(() => runSyncLoop('/api/ctrader/sync'), [runSyncLoop])
+
+  const reimportAll = useCallback(() => {
+    if (!confirm('Re-import the full account history? Already imported trades are never duplicated; deleted ones come back.')) return
+    runSyncLoop('/api/ctrader/import')
+  }, [runSyncLoop])
 
   async function chooseAccount(id: string) {
     setSaving(true)
@@ -182,6 +192,11 @@ export function BrokerConnections() {
               <button onClick={syncNow} disabled={syncing} style={{ ...secondaryBtn, opacity: syncing ? 0.6 : 1 }}>
                 <RefreshCw size={13} style={syncing ? { animation: 'spin 1s linear infinite' } : undefined} />
                 {syncing ? 'Syncing…' : 'Sync now'}
+              </button>
+            )}
+            {connected && selected && (
+              <button onClick={reimportAll} disabled={syncing} title="Rescan the full account history" style={{ ...secondaryBtn, opacity: syncing ? 0.6 : 1 }}>
+                <History size={13} /> Re-import all
               </button>
             )}
             {connected && (

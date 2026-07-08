@@ -7,9 +7,10 @@ export const maxDuration = 60
 
 /**
  * POST — full historical import: rewinds the sync cursor to the beginning of
- * the account's history and runs one sync pass. The unique index on
+ * the account's history and runs the first sync pass. The unique index on
  * (user_id, broker, broker_trade_id) guarantees re-scanned trades are never
- * duplicated. Callers repeat the request while the response says !done.
+ * duplicated. Call this ONCE; while the response says !done, continue with
+ * POST /api/ctrader/sync (calling this route again would rewind again).
  */
 export async function POST() {
   const supabase = await createSupabaseServer()

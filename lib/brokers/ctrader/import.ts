@@ -43,11 +43,21 @@ function weightedAvg(pairs: Array<{ price: number; weight: number }>): number {
   return pairs.reduce((s, p) => s + p.price * p.weight, 0) / totalW
 }
 
-/** Builds one NormalizedTrade from a position's complete deal chain, or null if not fully closed. */
+/**
+ * Builds one NormalizedTrade from a position's deal chain, or null if the
+ * position is not verifiably closed.
+ *
+ * Preferred path: complete chain (opening legs present, volumes balance) —
+ * entry from the actual opening deals. Fallback path (allowCloseOnly): only
+ * closing legs available (chain crosses the scan boundary and the by-position
+ * lookup failed) — entry from closePositionDetail.entryPrice, which every
+ * closing deal carries; opening-leg commission is then not recoverable.
+ */
 export function buildTradeFromDeals(
   positionId: number,
   deals: Array<Record<string, any>>,
   symbolName: (id: number) => string,
+  allowCloseOnly = false,
 ): NormalizedTrade | null {
   const executed = deals.filter(isExecuted)
   const opens  = executed.filter(d => !d.closePositionDetail)
@@ -56,14 +66,28 @@ export function buildTradeFromDeals(
 
   const openedVolume = opens.reduce((s, d) => s + executedVolume(d), 0)
   const closedVolume = closes.reduce((s, d) => s + Number(d.closePositionDetail.closedVolume ?? executedVolume(d)), 0)
-  // Not fully closed (or chain incomplete) — skip; it will import once fully closed
-  if (openedVolume === 0 || openedVolume !== closedVolume) return null
+  if (closedVolume === 0) return null
+
+  const complete = opens.length > 0 && openedVolume === closedVolume
+  // Opening legs partially present but unbalanced: either still open or a
+  // broken chain — never guess
+  if (!complete && opens.length > 0) return null
+  // Close-only chains are only trusted when the open-positions check ran
+  if (!complete && !allowCloseOnly) return null
 
   const moneyDigits = Number(closes[0].closePositionDetail.moneyDigits ?? closes[0].moneyDigits ?? 2)
   const scale = 10 ** moneyDigits
 
-  const direction: 'LONG' | 'SHORT' = isSell(opens[0]) ? 'SHORT' : 'LONG'
-  const entryPrice = weightedAvg(opens.map(d => ({ price: Number(d.executionPrice ?? 0), weight: executedVolume(d) })))
+  // Closing a LONG is a SELL, so close-only chains invert the close side
+  const direction: 'LONG' | 'SHORT' = complete
+    ? (isSell(opens[0]) ? 'SHORT' : 'LONG')
+    : (isSell(closes[0]) ? 'LONG' : 'SHORT')
+  const entryPrice = complete
+    ? weightedAvg(opens.map(d => ({ price: Number(d.executionPrice ?? 0), weight: executedVolume(d) })))
+    : weightedAvg(closes.map(d => ({
+        price: Number(d.closePositionDetail.entryPrice ?? 0),
+        weight: Number(d.closePositionDetail.closedVolume ?? executedVolume(d)),
+      })))
   const exitPrice  = weightedAvg(closes.map(d => ({
     price: Number(d.executionPrice ?? 0),
     weight: Number(d.closePositionDetail.closedVolume ?? executedVolume(d)),
@@ -81,8 +105,11 @@ export function buildTradeFromDeals(
   const balanceBefore = balanceAfter - net
   const returnPct = balanceBefore > 0 ? (net / balanceBefore) * 100 : null
 
-  const openTime  = Math.min(...opens.map(d => Number(d.executionTimestamp)))
   const closeTime = Math.max(...closes.map(d => Number(d.executionTimestamp)))
+  // Close-only chains don't know the true open moment — approximate with the first close
+  const openTime = complete
+    ? Math.min(...opens.map(d => Number(d.executionTimestamp)))
+    : Math.min(...closes.map(d => Number(d.createTimestamp ?? d.executionTimestamp)))
   const symbolId = Number(executed[0].symbolId)
 
   return {
@@ -104,6 +131,7 @@ export function buildTradeFromDeals(
       open_time: new Date(openTime).toISOString(),
       close_time: new Date(closeTime).toISOString(),
       duration_ms: closeTime - openTime,
+      entry_source: complete ? 'deals' : 'close_detail',
     },
     raw_import_data: deals,
   }
@@ -128,9 +156,11 @@ export async function importClosedTrades(args: {
     const symbolName = (id: number) => names.get(id) ?? `#${id}`
 
     let openPositionIds = new Set<number>()
+    let reconcileOk = false
     try {
       openPositionIds = await session.getOpenPositionIds(ctid)
-    } catch { /* best effort — the fully-closed volume check below still protects us */ }
+      reconcileOk = true
+    } catch { /* best effort — close-only fallback is disabled below when this fails */ }
 
     // First sync starts at account registration; later syncs at the stored cursor
     let from = sinceMs
@@ -146,7 +176,7 @@ export async function importClosedTrades(args: {
     const stats: ImportStats = {
       windows_scanned: 0, deals_seen: 0, positions_seen: 0,
       skipped_still_open: 0, skipped_no_close_legs: 0, skipped_incomplete_chain: 0,
-      trades_built: 0, incomplete_position_ids: [],
+      chain_fetch_failures: 0, trades_built: 0, incomplete_position_ids: [],
     }
 
     while (from < now) {
@@ -190,10 +220,15 @@ export async function importClosedTrades(args: {
       if (openedVolume < closedVolume) {
         // Opening legs precede the scan window — fetch the position's full chain
         await sleep(REQUEST_SPACING_MS)
-        try { chain = await session.getDealsByPosition(ctid, positionId) } catch { /* keep partial chain; volume check will skip it */ }
+        try {
+          chain = await session.getDealsByPosition(ctid, positionId)
+        } catch {
+          // Keep the close legs — buildTradeFromDeals falls back to closePositionDetail
+          stats.chain_fetch_failures++
+        }
       }
 
-      const trade = buildTradeFromDeals(positionId, chain, symbolName)
+      const trade = buildTradeFromDeals(positionId, chain, symbolName, reconcileOk)
       if (trade) {
         trades.push(trade)
         stats.trades_built++
