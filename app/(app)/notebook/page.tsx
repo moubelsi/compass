@@ -966,9 +966,11 @@ export default function NotebookPage() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
       {/* Page header */}
       <div style={{ padding: '36px 48px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Notebook</p>
-        <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Notebook</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Capture lessons. Build your edge.</p>
+        <div style={{ maxWidth: 1160, margin: '0 auto' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Notebook</p>
+          <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Notebook</h1>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Capture lessons. Build your edge.</p>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
