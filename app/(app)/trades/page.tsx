@@ -194,9 +194,9 @@ export default function TradesPage() {
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
 
       {/* ── Page header ── */}
-      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="m-pad" style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: 1300, margin: '0 auto' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div className="m-wrap" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
             <div>
               <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Trades</h1>
               {!loading && (
@@ -233,7 +233,7 @@ export default function TradesPage() {
 
           {/* Overall metric cards */}
           {!loading && trades.length > 0 && (
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="metric-row" style={{ display: 'flex', gap: 10 }}>
               <MetricCard label="Profit factor" value={profitFactor ? `${profitFactor.toFixed(2)}×` : '—'} color={profitFactor && profitFactor >= 1 ? 'var(--profit)' : profitFactor ? 'var(--loss)' : undefined} sub="Gross profit / loss" />
               <MetricCard label="Win rate" value={`${winRate.toFixed(1)}%`} color={winRate >= 50 ? 'var(--profit)' : 'var(--loss)'} sub={`${wins.length}W · ${losses.length}L`} />
               <MetricCard label="Avg win" value={avgWin > 0 ? formatCurrency(avgWin, true, symbol) : '—'} color={avgWin > 0 ? 'var(--profit)' : undefined} />
@@ -244,7 +244,7 @@ export default function TradesPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1300, margin: '0 auto', padding: '28px 48px' }}>
+      <div className="m-pad" style={{ maxWidth: 1300, margin: '0 auto', padding: '28px 48px' }}>
 
         {/* ── Filters ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
@@ -307,7 +307,8 @@ export default function TradesPage() {
             )}
 
             {/* Column header */}
-            <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+            <div className="card m-scroll-x" style={{ overflow: 'hidden', padding: 0 }}>
+              <div style={{ minWidth: 760 }}>
               <div style={{ display: 'grid', gridTemplateColumns: GRID, padding: '10px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', alignItems: 'center' }}>
                 <Star size={11} style={{ color: 'var(--border-default)' }} />
                 {(['Symbol', 'Strategy', 'Date', 'Return', 'P&L', 'R:R'] as const).map(h => {
@@ -404,6 +405,7 @@ export default function TradesPage() {
                   </div>
                 )
               })}
+              </div>
             </div>
           </>
         )}

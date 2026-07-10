@@ -50,7 +50,7 @@ function PositionSizeCalculator({ symbol }: { symbol: string }) {
       </div>
 
       {/* Inputs grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+      <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
         <div>
           <label style={labelStyle}>Account size ({symbol})</label>
           <input className="input tabular-nums" type="number" step="any" placeholder="10000" value={accountSize} onChange={e => setAccountSize(e.target.value)} />
@@ -77,7 +77,7 @@ function PositionSizeCalculator({ symbol }: { symbol: string }) {
 
       {/* Results */}
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {[
             { label: 'Risk amount', value: riskAmount != null ? `${symbol}${riskAmount.toFixed(2)}` : '—', color: riskAmount != null ? 'var(--loss)' : undefined },
             { label: 'Distance', value: distance != null ? distance.toFixed(distance < 1 ? 5 : 2) : '—', color: undefined },
@@ -199,7 +199,7 @@ function CompoundInterestCalculator({ symbol }: { symbol: string }) {
     <div className="card" style={{ padding: 28 }}>
       <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 20 }}>Compound interest calculator</p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+      <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
         <div>
           <label style={labelStyle}>Initial investment ({symbol})</label>
           <input className="input tabular-nums" type="number" step="any" min="0" placeholder="5000" value={initial} onChange={e => setInitial(e.target.value)} />
@@ -234,7 +234,7 @@ function CompoundInterestCalculator({ symbol }: { symbol: string }) {
       <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', margin: '4px 0 12px' }}>
         Regular contributions <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 24 }}>
+      <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 24 }}>
         <div>
           <label style={labelStyle}>Deposit amount ({symbol})</label>
           <input className="input tabular-nums" type="number" step="any" min="0" placeholder="0" value={deposit} onChange={e => setDeposit(e.target.value)} />
@@ -255,7 +255,7 @@ function CompoundInterestCalculator({ symbol }: { symbol: string }) {
 
       {/* Results */}
       <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: hasResult ? 24 : 0 }}>
+        <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: hasResult ? 24 : 0 }}>
           {tiles.map(({ label, value, color }) => (
             <div key={label} style={{ padding: '14px 16px', borderRadius: 10, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 500 }}>{label}</p>
@@ -306,14 +306,14 @@ export default function ToolsPage() {
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
-      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="m-pad" style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: 680, margin: '0 auto' }}>
           <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Tools</h1>
           <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Position size & compound interest calculators</p>
         </div>
       </div>
 
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 48px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="m-pad" style={{ maxWidth: 680, margin: '0 auto', padding: '40px 48px', display: 'flex', flexDirection: 'column', gap: 24 }}>
         <PositionSizeCalculator symbol={symbol} />
         <CompoundInterestCalculator symbol={symbol} />
       </div>

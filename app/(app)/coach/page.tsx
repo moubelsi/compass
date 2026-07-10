@@ -91,7 +91,7 @@ export default function CoachPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Page header */}
-      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="m-pad" style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: 680, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -114,7 +114,7 @@ export default function CoachPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 680, margin: '0 auto', padding: '28px 48px' }}>
+      <div className="m-pad" style={{ maxWidth: 680, margin: '0 auto', padding: '28px 48px' }}>
 
       {/* Error */}
       {error && (

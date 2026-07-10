@@ -295,8 +295,8 @@ export default function AnalyticsPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Header */}
-      <div style={{ padding: '40px 56px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+      <div className="m-pad" style={{ padding: '40px 56px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        <div className="m-wrap" style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 4 }}>Analytics</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -314,19 +314,19 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 48 }}>
+      <div className="m-pad" style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 48 }}>
 
         {/* Overview KPIs */}
         <div>
           <SectionHeader title="Overview" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 12 }}>
+          <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 12 }}>
             <StatCard label="Return" value={`${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%`} sub="Cumulative" color={totalReturn >= 0 ? 'var(--profit)' : 'var(--loss)'} />
             <StatCard label="Total P&L" value={formatCurrency(totalPnl, true, symbol)} sub="All time" color={totalPnl >= 0 ? 'var(--profit)' : 'var(--loss)'} />
             <StatCard label="Win rate" value={`${winRate.toFixed(1)}%`} sub={`${wins.length}W · ${losses.length}L`} color={winRate >= 50 ? 'var(--profit)' : 'var(--loss)'} />
             <StatCard label="Profit factor" value={profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—'} sub="Gross profit / loss" />
             <StatCard label="Avg R:R" value={avgRR > 0 ? avgRR.toFixed(2) : '—'} sub="Per trade" />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+          <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
             <StatCard label="Avg win" value={avgWin > 0 ? formatCurrency(avgWin, true, symbol) : '—'} color="var(--profit)" />
             <StatCard label="Avg loss" value={avgLoss > 0 ? `-${symbol}${avgLoss.toFixed(2)}` : '—'} color="var(--loss)" />
             <StatCard label="Max drawdown" value={maxDrawdown > 0 ? `-${maxDrawdown.toFixed(2)}%` : '—'} sub="Peak-to-trough" color={maxDrawdown > 0 ? 'var(--loss)' : undefined} />
@@ -360,7 +360,7 @@ export default function AnalyticsPage() {
         {monthlyData.length > 0 && (
           <div>
             <SectionHeader title="Monthly performance" />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               {/* Monthly P&L */}
               <div>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>P&L per month</p>
@@ -404,7 +404,7 @@ export default function AnalyticsPage() {
         {/* Strategy + Day charts */}
         <div>
           <SectionHeader title="Breakdowns" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
             {/* P&L by strategy */}
             <div>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>P&L by strategy</p>
@@ -587,7 +587,7 @@ export default function AnalyticsPage() {
           <div>
             <SectionHeader title="Behaviour" sub="Trade type and confidence analysis" />
             {hasBehaviourData && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 {[
                   { label: 'Planned', stats: plannedStats, accent: 'var(--profit)' },
                   { label: 'Impulsive', stats: impulsiveStats, accent: 'var(--loss)' },
@@ -605,7 +605,7 @@ export default function AnalyticsPage() {
               </div>
             )}
             {hasConfidenceData && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                 {confBands.map(band => (
                   <div key={band.label} className="card" style={{ padding: 24 }}>
                     <div style={{ marginBottom: 16 }}>
@@ -626,7 +626,7 @@ export default function AnalyticsPage() {
         {/* Discipline */}
         <div>
           <SectionHeader title="Discipline" sub="Plan adherence and consistency score" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+          <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
             <StatCard
               label="Discipline score"
               value={disciplineScore !== null ? String(disciplineScore) : '—'}

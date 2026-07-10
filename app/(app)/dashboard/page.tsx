@@ -366,7 +366,7 @@ function TradingSession({ symbol, todayCount, todayPnl, weekPnl, goalDollar, goa
 
       {configuring ? (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 14 }}>
+          <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={zoneLabel}>Max trades / day</label>
               <input className="input tabular-nums" type="number" min="1" max="20" placeholder="3" value={limitIn} onChange={e => setLimitIn(e.target.value)} style={{ fontSize: 13 }} />
@@ -398,7 +398,7 @@ function TradingSession({ symbol, todayCount, todayPnl, weekPnl, goalDollar, goa
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+        <div className="session-row" style={{ display: 'flex', alignItems: 'stretch' }}>
           {/* Status */}
           <div style={{ paddingRight: 28, minWidth: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -561,7 +561,7 @@ export default function DashboardPage() {
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
 
       {/* ── Page header ── */}
-      <div style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '40px 56px 28px' }}>
+      <div className="m-pad" style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '40px 56px 28px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 40 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{greeting}</p>
@@ -575,14 +575,14 @@ export default function DashboardPage() {
                 <Plus size={12} strokeWidth={2.5} />Log trade
               </Link>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Find · Plan · Wait · Execute · Review · Repeat</p>
-            <p style={{ fontSize: 10, color: 'var(--text-disabled)', fontStyle: 'italic', marginTop: 2 }}>— Moneytaur</p>
+            <p className="m-hide" style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Find · Plan · Wait · Execute · Review · Repeat</p>
+            <p className="m-hide" style={{ fontSize: 10, color: 'var(--text-disabled)', fontStyle: 'italic', marginTop: 2 }}>— Moneytaur</p>
           </div>
         </div>
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 40 }}>
+      <div className="m-pad" style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
         {/* 1 · Can I still trade today? */}
         <TradingSession
@@ -607,7 +607,7 @@ export default function DashboardPage() {
         />
 
         {/* 2 · How is today going?  /  3 · How am I doing overall? */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr' }}>
+        <div className="m-grid-1 today-split" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr' }}>
           <div style={{ paddingRight: 44 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>Today</p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: todayTrades.length > 0 ? 22 : 10 }}>
@@ -635,7 +635,7 @@ export default function DashboardPage() {
           </div>
 
           {/* All-time snapshot — deliberately quieter */}
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 44 }}>
+          <div className="alltime-block" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 44 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>All-time</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 24px' }}>
               {[
@@ -655,7 +655,7 @@ export default function DashboardPage() {
 
         {/* Equity curve */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div className="m-wrap" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, gap: 10 }}>
             <div>
               <h2 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 2 }}>Equity curve</h2>
               <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cumulative % return per trade</p>
@@ -686,7 +686,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Middle: Calendar + Recent trades */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 24 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 24 }}>
           <div>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>P&L calendar</p>
             <div className="card" style={{ padding: '18px 20px' }}>

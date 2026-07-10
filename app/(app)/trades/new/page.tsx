@@ -171,7 +171,7 @@ export default function NewTradePage() {
         </button>
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 40px' }}>
+      <div className="m-pad" style={{ maxWidth: 900, margin: '0 auto', padding: '32px 40px' }}>
         {error && (
           <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{error}</div>
         )}
@@ -203,7 +203,7 @@ export default function NewTradePage() {
         )}
 
         {/* Two column layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           {/* Left column */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Trade details */}

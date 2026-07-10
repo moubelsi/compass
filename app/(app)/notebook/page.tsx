@@ -501,7 +501,7 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
   const updated = page ? new Date(page.updated_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null
 
   return (
-    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div className="m-pad" style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
       <div style={{ marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
           {editableTitle ? (
@@ -707,7 +707,7 @@ function WeeklyRecap({ week, trades, page, onSaved, symbol }: {
   const endFmt   = new Date(week.end   + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
-    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
+    <div className="m-pad" style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -855,7 +855,7 @@ function MonthlyReview({ month, trades, page, onSaved, symbol }: {
   }
 
   return (
-    <div style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
+    <div className="m-pad" style={{ padding: '48px 60px', maxWidth: 760, display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Monthly Review</p>
         <h1 style={{ fontSize: 30, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1 }}>{month.label}</h1>
@@ -1046,7 +1046,7 @@ export default function NotebookPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
       {/* Page header */}
-      <div style={{ padding: '36px 48px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0 }}>
+      <div className="m-pad" style={{ padding: '36px 48px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0 }}>
         <div style={{ maxWidth: 1160, margin: '0 auto' }}>
           <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Notebook</p>
           <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Notebook</h1>
@@ -1055,20 +1055,30 @@ export default function NotebookPage() {
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Left — folder nav */}
-        <div style={{ width: 220, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        {/* Left — folder nav (mobile: step 1 of the drill-down) */}
+        <div className={'nb-pane' + (activeFolder ? ' m-hide' : '')} style={{ width: 220, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
           <FolderNav active={activeFolder} counts={counts} onSelect={handleFolderSelect} />
         </div>
 
-        {/* Middle — note list */}
-        <div style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
+        {/* Middle — note list (mobile: step 2) */}
+        <div className={'nb-pane' + (!activeFolder || selectedNote ? ' m-hide' : '')} style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
+          <button className="m-only" onClick={() => { setActiveFolder(null); setSelectedNote(null) }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 20px', fontSize: 13, color: 'var(--accent)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+            ← All folders
+          </button>
           {loading
             ? <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: 'var(--text-disabled)' }}>Loading…</p></div>
             : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} onCreateNote={createNote} />}
         </div>
 
-        {/* Right — content */}
-        <div style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
+        {/* Right — content (mobile: step 3) */}
+        <div className={'nb-right' + (!selectedNote ? ' m-hide' : '')} style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
+          {selectedNote && (
+            <button className="m-only" onClick={() => setSelectedNote(null)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 20px', fontSize: 13, color: 'var(--accent)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}>
+              ← Back
+            </button>
+          )}
           <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} onDeleted={handleDeleted} symbol={symbol} />
         </div>
       </div>

@@ -100,14 +100,14 @@ export default function SettingsPage() {
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
-      <div style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="m-pad" style={{ padding: '40px 48px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
           <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Settings</h1>
           <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Manage your account</p>
         </div>
       </div>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 48px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div className="m-pad" style={{ maxWidth: 720, margin: '0 auto', padding: '40px 48px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {/* Account */}
         <div className="card" style={{ padding: 28 }}>
@@ -122,7 +122,7 @@ export default function SettingsPage() {
               const totalPnl = trades.reduce((s, t) => s + Number(t.pnl || 0), 0)
               const winRate = ((wins / trades.length) * 100).toFixed(1)
               return (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, paddingTop: 4 }}>
+                <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, paddingTop: 4 }}>
                   {[
                     { label: 'Total trades', value: String(trades.length), color: undefined },
                     { label: 'Win rate', value: `${winRate}%`, color: Number(winRate) >= 50 ? 'var(--profit)' : 'var(--loss)' },

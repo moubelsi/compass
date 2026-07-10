@@ -243,10 +243,38 @@ body {
   .mobile-header { display: none !important; }
 }
 
+@media (min-width: 769px) {
+  .m-only { display: none !important; }
+}
+
 @media (max-width: 768px) {
   .desktop-sidebar { display: none !important; }
   .page-fixed-bar  { left: 0 !important; top: var(--header-height) !important; }
   main { padding-left: 0 !important; padding-top: 52px !important; padding-bottom: 64px !important; }
+
+  /* ── Generic mobile utilities (inline styles are overridden per class) ── */
+  .m-pad      { padding-left: 20px !important; padding-right: 20px !important; }
+  .m-grid-1   { grid-template-columns: 1fr !important; }
+  .m-grid-2   { grid-template-columns: repeat(2, 1fr) !important; }
+  .m-col      { flex-direction: column !important; align-items: stretch !important; }
+  .m-wrap     { flex-wrap: wrap !important; }
+  .m-hide     { display: none !important; }
+  .m-scroll-x { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+
+  /* Dashboard: trading session zones wrap into a 2×2 grid */
+  .session-row { flex-wrap: wrap !important; row-gap: 18px !important; }
+  .session-row > div { flex: 1 1 42% !important; border-left: none !important; padding-left: 0 !important; min-width: 0 !important; }
+
+  /* Dashboard: today/all-time split stacks; divider flips from left to top */
+  .today-split > div:first-child { padding-right: 0 !important; }
+  .today-split .alltime-block { border-left: none !important; padding-left: 0 !important; border-top: 1px solid var(--border-subtle); padding-top: 20px; margin-top: 4px; }
+
+  /* Trades: metric cards wrap 2-up */
+  .metric-row { flex-wrap: wrap !important; }
+  .metric-row > div { flex: 1 1 42% !important; }
+
+  /* Notebook: panes become full-width steps of a drill-down */
+  .nb-pane, .nb-right { width: 100% !important; border-right: none !important; }
 
   /* Journal responsive */
   .journal-header-pad { padding-left: 20px !important; padding-right: 20px !important; }
