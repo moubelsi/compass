@@ -191,7 +191,7 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect, onCreateNot
           </div>
         ) : notes.map(note => {
           const on      = selectedNote === note.slug
-          const preview = (note.content ?? '').replace(/!\[[^\]]*\]\([^)]+\)/g, '').replace(/\n/g, ' ').trim().slice(0, 80)
+          const preview = (note.content ?? '').replace(/!\[[^\]]*\]\([^)]+\)/g, '').replace(/[#*`]/g, '').replace(/\n/g, ' ').trim().slice(0, 80)
           const date    = new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           return (
             <button key={note.slug} onClick={() => onSelect(note.slug)}
@@ -383,7 +383,9 @@ function MarkdownView({ text }: { text: string }) {
     }
     flushList()
     if (!line.trim()) continue
-    const h = line.match(/^(#{1,3})\s+(.*)/)
+    // Forgiving heading syntax: '## Heading', '##Heading' and '##Heading##'
+    // all work; a single '#' still requires the space so '#1 priority' stays text
+    const h = line.match(/^(#{1,3})\s+(.+?)\s*#*\s*$/) || line.match(/^(#{2,3})\s*(.+?)\s*#*\s*$/)
     if (h) {
       const size = h[1].length === 1 ? 22 : h[1].length === 2 ? 18 : 16
       out.push(<p key={k++} style={{ fontSize: size, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', margin: '20px 0 8px' }}>{renderInline(h[2])}</p>)
