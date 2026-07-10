@@ -13,8 +13,13 @@ import { computeDiscipline } from '@/lib/discipline'
 function pnlBarShape(props: any) {
   const { x, y, width, height } = props
   if (!width || !height) return null
-  const fill = Number(props.value) >= 0 ? 'var(--profit)' : 'var(--loss)'
-  return <rect x={x} y={y} width={width} height={height} rx={3} fill={fill} fillOpacity={0.8} />
+  // Recharts passes a negative height for bars below the axis; normalize like
+  // its own Rectangle does, otherwise the <rect> silently renders nothing
+  const yy = height < 0 ? y + height : y
+  const hh = Math.abs(height)
+  const raw = Number(props.payload?.pnl ?? props.value)
+  const fill = raw >= 0 ? 'var(--profit)' : 'var(--loss)'
+  return <rect x={x} y={yy} width={width} height={hh} rx={3} fill={fill} fillOpacity={0.8} />
 }
 
 function winRateBarShape(props: any) {
@@ -168,7 +173,8 @@ export default function AnalyticsPage() {
   // Calendar heatmap
   const calMap: Record<string, { pnl: number; trades: number }> = {}
   trades.forEach(t => {
-    const date = t.trade_date || t.created_at?.split('T')[0]
+    // trade_date can carry a time component — cut it off so keys match the heatmap's YYYY-MM-DD cells
+    const date = ((t.trade_date || t.created_at || '') as string).split('T')[0]
     if (!date) return
     if (!calMap[date]) calMap[date] = { pnl: 0, trades: 0 }
     calMap[date].pnl += Number(t.pnl || 0)
