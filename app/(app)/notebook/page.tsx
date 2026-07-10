@@ -550,10 +550,11 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
       <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 28 }} />
 
       {(() => {
-        const textOnly = content.replace(/\n?!\[[^\]]*\]\([^)]+\)\n?/g, '').trimEnd()
+        // No trimEnd here: it would eat the space the user just typed
+        const textOnly = content.replace(/\n?!\[[^\]]*\]\([^)]+\)\n?/g, '')
         // Reading view when there is content and the user isn't typing;
         // click anywhere in the text to switch back to the editor
-        if (!editing && textOnly) {
+        if (!editing && textOnly.trim()) {
           return (
             <div onClick={() => setEditing(true)} title="Click to edit"
               style={{ flex: 1, minHeight: 200, cursor: 'text' }}>
@@ -602,6 +603,7 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
         </button>
         <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAttach} />
         <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>PNG · JPG · up to 10 MB</span>
+        <span style={{ fontSize: 11, color: 'var(--text-disabled)', marginLeft: 'auto' }}>Click outside the text to preview formatting</span>
       </div>
     </div>
   )
