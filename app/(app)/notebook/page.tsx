@@ -340,6 +340,61 @@ function extractImages(text: string): string[] {
   return [...text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map(m => m[1])
 }
 
+// ─── Markdown rendering (calm subset: headings, bold, italic, code, bullets) ──
+
+function renderInline(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = []
+  const re = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g
+  let last = 0
+  let i = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    if (m.index > last) nodes.push(text.slice(last, m.index))
+    const tok = m[0]
+    if (tok.startsWith('**')) {
+      nodes.push(<strong key={i++} style={{ fontWeight: 600 }}>{tok.slice(2, -2)}</strong>)
+    } else if (tok.startsWith('`')) {
+      nodes.push(<code key={i++} style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: '0.88em', background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4 }}>{tok.slice(1, -1)}</code>)
+    } else {
+      nodes.push(<em key={i++}>{tok.slice(1, -1)}</em>)
+    }
+    last = m.index + tok.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
+}
+
+function MarkdownView({ text }: { text: string }) {
+  const out: React.ReactNode[] = []
+  let list: React.ReactNode[] | null = null
+  let k = 0
+  const flushList = () => {
+    if (list) {
+      out.push(<ul key={k++} style={{ margin: '4px 0 14px', paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 6 }}>{list}</ul>)
+      list = null
+    }
+  }
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd()
+    const bullet = line.match(/^\s*[-*]\s+(.*)/)
+    if (bullet) {
+      ;(list ??= []).push(<li key={k++} style={{ fontSize: 15, lineHeight: 1.75, color: 'var(--text-primary)', letterSpacing: '0.005em' }}>{renderInline(bullet[1])}</li>)
+      continue
+    }
+    flushList()
+    if (!line.trim()) continue
+    const h = line.match(/^(#{1,3})\s+(.*)/)
+    if (h) {
+      const size = h[1].length === 1 ? 22 : h[1].length === 2 ? 18 : 16
+      out.push(<p key={k++} style={{ fontSize: size, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', margin: '20px 0 8px' }}>{renderInline(h[2])}</p>)
+      continue
+    }
+    out.push(<p key={k++} style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', marginBottom: 12, letterSpacing: '0.005em' }}>{renderInline(line)}</p>)
+  }
+  flushList()
+  return <div>{out}</div>
+}
+
 // ─── Page editor (KB + Planning) ─────────────────────────────────────────────
 
 function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSaved, onDeleted }: {
@@ -352,6 +407,7 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
   const [saveState,   setSaveState]   = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError,   setSaveError]   = useState<string | null>(null)
   const [confirmDel,  setConfirmDel]  = useState(false)
+  const [editing,     setEditing]     = useState(false)
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const taRef      = useRef<HTMLTextAreaElement>(null)
   const fileRef    = useRef<HTMLInputElement>(null)
@@ -368,9 +424,13 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
     setSaveState('idle')
     setSaveError(null)
     setConfirmDel(false)
+    setEditing(false)
     editingRef.current = false
     if (timerRef.current) clearTimeout(timerRef.current)
   }, [slug]) // intentionally only slug — not page content (avoids mid-type reset)
+
+  // Entering edit mode puts the caret back in the text
+  useEffect(() => { if (editing) taRef.current?.focus() }, [editing])
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
 
@@ -489,17 +549,34 @@ function PageEditor({ slug, title: initTitle, editableTitle = false, page, onSav
 
       <div style={{ height: 1, background: 'var(--border-subtle)', marginBottom: 28 }} />
 
-      <textarea
-        ref={taRef}
-        value={content.replace(/\n?!\[[^\]]*\]\([^)]+\)\n?/g, '').trimEnd()}
-        onChange={e => {
-          const imgs = extractImages(content)
-          const imgBlock = imgs.length > 0 ? '\n' + imgs.map(u => `![](${u})`).join('\n') : ''
-          handleChange(e.target.value + imgBlock)
-        }}
-        placeholder={`Write your ${title.toLowerCase()} here…\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
-        style={{ flex: 1, minHeight: 200, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
-      />
+      {(() => {
+        const textOnly = content.replace(/\n?!\[[^\]]*\]\([^)]+\)\n?/g, '').trimEnd()
+        // Reading view when there is content and the user isn't typing;
+        // click anywhere in the text to switch back to the editor
+        if (!editing && textOnly) {
+          return (
+            <div onClick={() => setEditing(true)} title="Click to edit"
+              style={{ flex: 1, minHeight: 200, cursor: 'text' }}>
+              <MarkdownView text={textOnly} />
+            </div>
+          )
+        }
+        return (
+          <textarea
+            ref={taRef}
+            value={textOnly}
+            onFocus={() => setEditing(true)}
+            onBlur={() => setEditing(false)}
+            onChange={e => {
+              const imgs = extractImages(content)
+              const imgBlock = imgs.length > 0 ? '\n' + imgs.map(u => `![](${u})`).join('\n') : ''
+              handleChange(e.target.value + imgBlock)
+            }}
+            placeholder={`${title.trim() ? `Write your ${title.toLowerCase()} here…` : 'Write here…'}\n\nUse markdown:\n- Bullet point\n## Heading\n**Bold text**`}
+            style={{ flex: 1, minHeight: 200, width: '100%', background: 'transparent', border: 'none', outline: 'none', resize: 'none', fontSize: 15, lineHeight: 1.9, color: 'var(--text-primary)', fontFamily: 'inherit', letterSpacing: '0.005em' }}
+          />
+        )
+      })()}
 
       {extractImages(content).length > 0 && (
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
