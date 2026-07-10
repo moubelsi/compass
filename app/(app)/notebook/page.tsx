@@ -102,9 +102,13 @@ function tradeDay(t: Trade): string {
   return (t.trade_date ? t.trade_date.slice(0, 10) : null) || localDateStr(new Date(t.created_at))
 }
 
+function focusSlug(w: { year: number; week: number }): string {
+  return `focus-${w.year}-${String(w.week).padStart(2, '0')}`
+}
+
 // ─── Left sidebar ─────────────────────────────────────────────────────────────
 
-function FolderNav({ active, onSelect }: { active: string | null; onSelect: (id: string) => void }) {
+function FolderNav({ active, counts, onSelect }: { active: string | null; counts: Record<string, number>; onSelect: (id: string) => void }) {
   const sectionLabel = (text: string) => (
     <p key={text} style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '20px 16px 6px', margin: 0 }}>
       {text}
@@ -113,17 +117,22 @@ function FolderNav({ active, onSelect }: { active: string | null; onSelect: (id:
 
   const folderBtn = (id: string, label: string) => {
     const on = active === id
+    const n  = counts[id] ?? 0
     return (
-      <button key={id} onClick={() => onSelect(id)} style={{ width: '100%', textAlign: 'left', padding: '7px 16px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderLeft: `2px solid ${on ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', fontSize: 13, color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 500 : 400, transition: 'all 0.1s' }}
+      <button key={id} onClick={() => onSelect(id)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left', padding: '7px 16px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderLeft: `2px solid ${on ? 'var(--accent)' : 'transparent'}`, cursor: 'pointer', fontSize: 13, color: on ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: on ? 500 : 400, transition: 'all 0.1s' }}
         onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
         onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}
-      >{label}</button>
+      >
+        <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{label}</span>
+        {n > 0 && (
+          <span style={{ fontSize: 11, color: 'var(--text-disabled)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{n}</span>
+        )}
+      </button>
     )
   }
 
   return (
-    <div style={{ padding: '28px 0 20px' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.015em', padding: '0 16px', marginBottom: 20 }}>Notebook</p>
+    <div style={{ padding: '12px 0 20px' }}>
       {sectionLabel('Knowledge Base')}
       {KB_FOLDERS.map(f => folderBtn(f.id, f.label))}
       {sectionLabel('Performance')}
@@ -153,28 +162,31 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect, onCreateNot
     )
   }
 
-  // Knowledge Base — note list
-  const kbFolder = KB_FOLDERS.find(f => f.id === active)
-  if (kbFolder) {
+  // Note folders (Knowledge Base + Trading Goals) — free-form document lists
+  const noteFolder = KB_FOLDERS.find(f => f.id === active)
+    ?? (active === 'trading-goals' ? { id: 'trading-goals' as const, label: 'Trading Goals' } : undefined)
+  if (noteFolder) {
     const notes = Object.values(pages)
-      .filter(p => p.slug === kbFolder.id || p.slug.startsWith(kbFolder.id + '-'))
+      .filter(p => p.slug === noteFolder.id || p.slug.startsWith(noteFolder.id + '-'))
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    const emptyCopy = noteFolder.id === 'trading-goals' ? 'No goals yet' : 'No notes yet'
+    const createCopy = noteFolder.id === 'trading-goals' ? 'Set your first goal →' : 'Create first note →'
 
     return (
       <div>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{kbFolder.label}</p>
-          <button onClick={() => onCreateNote(kbFolder.id)}
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{noteFolder.label}</p>
+          <button onClick={() => onCreateNote(noteFolder.id)}
             style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500, padding: '2px 0' }}>
             + New
           </button>
         </div>
         {notes.length === 0 ? (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', marginBottom: 12 }}>No notes yet</p>
-            <button onClick={() => onCreateNote(kbFolder.id)}
+            <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic', marginBottom: 12 }}>{emptyCopy}</p>
+            <button onClick={() => onCreateNote(noteFolder.id)}
               style={{ fontSize: 13, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
-              Create first note →
+              {createCopy}
             </button>
           </div>
         ) : notes.map(note => {
@@ -291,21 +303,32 @@ function MiddleList({ active, trades, pages, selectedNote, onSelect, onCreateNot
     )
   }
 
-  // Planning
-  const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
-  if (planFolder) {
-    const page    = pages[planFolder.slug]
-    const preview = page?.content?.trim().slice(0, 160)
+  // Weekly Focus — one document per week, mirroring Weekly Recaps
+  if (active === 'weekly-focus') {
+    const year  = new Date().getFullYear()
+    const weeks = getWeeksForYear(year)
     return (
-      <div style={{ padding: '24px 0' }}>
-        <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 4 }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{planFolder.label}</p>
+      <div>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Weekly Focus</p>
+          <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 2 }}>{year}</p>
         </div>
-        <div style={{ padding: '12px 20px' }}>
-          {preview
-            ? <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{preview}</p>
-            : <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Nothing written yet</p>}
-        </div>
+        {weeks.map(w => {
+          const slug = focusSlug(w)
+          const on   = selectedNote === slug
+          return (
+            <button key={slug} onClick={() => onSelect(slug)} style={{ width: '100%', textAlign: 'left', padding: '10px 20px', background: on ? 'var(--bg-elevated)' : 'transparent', border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, transition: 'background 0.1s' }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.background = 'var(--bg-elevated)' }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.background = 'transparent' }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', minWidth: 28, fontVariantNumeric: 'tabular-nums' }}>
+                W{String(w.week).padStart(2, '0')}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, lineHeight: 1.4 }}>{w.label}</span>
+              {pages[slug] && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)', display: 'block', opacity: 0.5, flexShrink: 0 }} />}
+            </button>
+          )
+        })}
       </div>
     )
   }
@@ -820,8 +843,23 @@ function RightPanel({ active, selectedNote, trades, pages, onSaved, onDeleted, s
     return <PageEditor slug={selectedNote} title={pages[selectedNote]?.title ?? ''} editableTitle page={pages[selectedNote] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
   }
 
-  const planFolder = PLANNING_FOLDERS.find(f => f.id === active)
-  if (planFolder) return <PageEditor slug={planFolder.slug} title={planFolder.label} page={pages[planFolder.slug] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
+  // Trading Goals — every goal is its own document with an editable title
+  if (active === 'trading-goals') {
+    if (!selectedNote) return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400, gap: 12 }}>
+        <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>Select a goal or set a new one</p>
+      </div>
+    )
+    return <PageEditor slug={selectedNote} title={pages[selectedNote]?.title ?? ''} editableTitle page={pages[selectedNote] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
+  }
+
+  // Weekly Focus — one document per ISO week, never overwritten
+  if (active === 'weekly-focus' && selectedNote) {
+    const m = selectedNote.match(/^focus-(\d{4})-(\d{2})$/)
+    if (m) {
+      return <PageEditor slug={selectedNote} title={`Week ${Number(m[2])} Focus`} page={pages[selectedNote] ?? null} onSaved={onSaved} onDeleted={onDeleted} />
+    }
+  }
 
   if (active === 'weekly-recaps' && selectedNote) {
     const weeks = getWeeksForYear(new Date().getFullYear())
@@ -838,7 +876,7 @@ function RightPanel({ active, selectedNote, trades, pages, onSaved, onDeleted, s
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 400 }}>
       <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>
-        {active === 'weekly-recaps' || active === 'monthly-reviews' ? 'Select a period to begin' : active ? 'Open a note to begin writing' : 'Select a folder from the left'}
+        {active === 'weekly-recaps' || active === 'monthly-reviews' || active === 'weekly-focus' ? 'Select a period to begin' : active ? 'Open a note to begin writing' : 'Select a folder from the left'}
       </p>
     </div>
   )
@@ -866,6 +904,29 @@ export default function NotebookPage() {
       setTrades((tData || []) as Trade[])
       const map: Record<string, NotebookPage> = {}
       ;(kData || []).forEach((p: NotebookPage) => { map[p.slug] = p })
+
+      // One-time migration: the old single-page Planning entries become
+      // documents in their folders, so no existing writing is lost.
+      const legacyFocus = map['planning-weekly-focus']
+      if (legacyFocus) {
+        const now  = new Date()
+        const slug = focusSlug({ year: now.getFullYear(), week: isoWeekNum(now) })
+        if (!map[slug]) {
+          const { data } = await supabase.from('notebook_pages')
+            .update({ slug, title: `Week ${isoWeekNum(now)} Focus` })
+            .eq('id', legacyFocus.id).select().single()
+          if (data) { delete map['planning-weekly-focus']; map[slug] = data as NotebookPage }
+        }
+      }
+      const legacyGoals = map['planning-trading-goals']
+      if (legacyGoals) {
+        const slug = `trading-goals-${Date.now()}`
+        const { data } = await supabase.from('notebook_pages')
+          .update({ slug, title: legacyGoals.title || 'Trading Goals' })
+          .eq('id', legacyGoals.id).select().single()
+        if (data) { delete map['planning-trading-goals']; map[slug] = data as NotebookPage }
+      }
+
       setPages(map)
       setLoading(false)
     }
@@ -874,9 +935,18 @@ export default function NotebookPage() {
 
   function handleFolderSelect(id: string) {
     setActiveFolder(id)
-    const isPlan = PLANNING_FOLDERS.some(f => f.id === id)
-    if (isPlan) setSelectedNote(id)
-    else setSelectedNote(null)
+    setSelectedNote(null)
+  }
+
+  // Folder document counts — shown as muted numbers in the nav
+  const counts: Record<string, number> = {}
+  {
+    const slugs = Object.keys(pages)
+    KB_FOLDERS.forEach(f => { counts[f.id] = slugs.filter(s => s === f.id || s.startsWith(f.id + '-')).length })
+    counts['weekly-recaps']   = slugs.filter(s => s.startsWith('week-')).length
+    counts['monthly-reviews'] = slugs.filter(s => s.startsWith('monthly-')).length
+    counts['weekly-focus']    = slugs.filter(s => s.startsWith('focus-')).length
+    counts['trading-goals']   = slugs.filter(s => s.startsWith('trading-goals-')).length
   }
 
   function createNote(folderId: string) {
@@ -893,22 +963,31 @@ export default function NotebookPage() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
-      {/* Left — folder nav */}
-      <div style={{ width: 220, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-        <FolderNav active={activeFolder} onSelect={handleFolderSelect} />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: 'var(--bg-base)' }}>
+      {/* Page header */}
+      <div style={{ padding: '36px 48px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Notebook</p>
+        <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Notebook</h1>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Capture lessons. Build your edge.</p>
       </div>
 
-      {/* Middle — note list */}
-      <div style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
-        {loading
-          ? <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: 'var(--text-disabled)' }}>Loading…</p></div>
-          : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} onCreateNote={createNote} />}
-      </div>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left — folder nav */}
+        <div style={{ width: 220, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+          <FolderNav active={activeFolder} counts={counts} onSelect={handleFolderSelect} />
+        </div>
 
-      {/* Right — content */}
-      <div style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
-        <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} onDeleted={handleDeleted} symbol={symbol} />
+        {/* Middle — note list */}
+        <div style={{ width: 258, height: '100%', overflowY: 'auto', flexShrink: 0, borderRight: '1px solid var(--border-subtle)' }}>
+          {loading
+            ? <div style={{ padding: 24 }}><p style={{ fontSize: 13, color: 'var(--text-disabled)' }}>Loading…</p></div>
+            : <MiddleList active={activeFolder} trades={trades} pages={pages} selectedNote={selectedNote} onSelect={setSelectedNote} onCreateNote={createNote} />}
+        </div>
+
+        {/* Right — content */}
+        <div style={{ flex: 1, height: '100%', overflowY: 'auto', minWidth: 0 }}>
+          <RightPanel active={activeFolder} selectedNote={selectedNote} trades={trades} pages={pages} onSaved={handleSaved} onDeleted={handleDeleted} symbol={symbol} />
+        </div>
       </div>
     </div>
   )
