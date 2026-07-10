@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, Plus, Target, Zap, X, Sparkles } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Plus, X, Sparkles } from 'lucide-react'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
@@ -271,82 +271,186 @@ function DayPanel({ date, trades, entry, onClose }: {
 
 // ─── Daily limit widget ───────────────────────────────────────────────────────
 
-function DailyLimitWidget({ todayCount, limit, onSetLimit }: {
-  todayCount: number
-  limit: number | null
-  onSetLimit: (n: number | null) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [input, setInput]     = useState('')
+interface SessionConfig {
+  dailyLimit: number | null
+  dailyLossLimit: number | null
+  weeklyGoal: string
+  weeklyGoalMode: 'dollar' | 'percent'
+  accountSize: string
+}
 
-  const pct      = limit ? Math.min(todayCount / limit * 100, 100) : 0
-  const exceeded = limit ? todayCount > limit : false
-  const atLimit  = limit ? todayCount === limit : false
-  const barColor = exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--accent)'
-  const textColor = exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--text-primary)'
+/**
+ * The premium status bar answering "can I still trade today?" at a glance:
+ * session status, trade count, daily loss and weekly goal in one container
+ * with thin dividers and 3px progress bars. All limits are configured inline.
+ */
+function TradingSession({ symbol, todayCount, todayPnl, weekPnl, goalDollar, goalProgress, dailyLimit, dailyLossLimit, weeklyGoal, weeklyGoalMode, accountSize, onConfigSaved }: {
+  symbol: string
+  todayCount: number
+  todayPnl: number
+  weekPnl: number
+  goalDollar: number
+  goalProgress: number
+  weeklyGoal: string
+  weeklyGoalMode: 'dollar' | 'percent'
+  accountSize: string
+  dailyLimit: number | null
+  dailyLossLimit: number | null
+  onConfigSaved: (c: SessionConfig) => void
+}) {
+  const [configuring, setConfiguring] = useState(false)
+  const [limitIn, setLimitIn] = useState('')
+  const [lossIn,  setLossIn]  = useState('')
+  const [goalIn,  setGoalIn]  = useState('')
+  const [modeIn,  setModeIn]  = useState<'dollar' | 'percent'>('dollar')
+  const [acctIn,  setAcctIn]  = useState('')
+
+  const lossToday = Math.max(0, -todayPnl)
+  const tradesPct = dailyLimit ? Math.min((todayCount / dailyLimit) * 100, 100) : 0
+  const lossPct   = dailyLossLimit ? Math.min((lossToday / dailyLossLimit) * 100, 100) : 0
+
+  const limitReached =
+    (dailyLimit != null && todayCount >= dailyLimit) ||
+    (dailyLossLimit != null && lossToday >= dailyLossLimit)
+  const oneLeft   = !limitReached && dailyLimit != null && dailyLimit - todayCount === 1
+  const hasLimits = dailyLimit != null || dailyLossLimit != null
+  const status = !hasLimits
+    ? { color: 'var(--text-disabled)', label: 'No limits set' }
+    : limitReached ? { color: 'var(--loss)',   label: 'Limit reached' }
+    : oneLeft      ? { color: '#B45309',       label: 'One trade left' }
+    :                { color: 'var(--profit)', label: 'Safe' }
+
+  const zoneLabel: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 7 }
+  const zoneValue: React.CSSProperties = { fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1.2 }
+  const barTrack: React.CSSProperties  = { height: 3, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden', marginTop: 10 }
+  const zone: React.CSSProperties      = { flex: 1, padding: '2px 28px', borderLeft: '1px solid var(--border-subtle)' }
+  const dim = (text: string) => <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{text}</span>
+
+  function openConfig() {
+    setLimitIn(dailyLimit != null ? String(dailyLimit) : '')
+    setLossIn(dailyLossLimit != null ? String(dailyLossLimit) : '')
+    setGoalIn(weeklyGoal)
+    setModeIn(weeklyGoalMode)
+    setAcctIn(accountSize)
+    setConfiguring(true)
+  }
 
   function save() {
-    const n = parseInt(input)
-    if (n > 0) {
-      onSetLimit(n)
-      localStorage.setItem('dailyTradeLimit', String(n))
-    } else {
-      onSetLimit(null)
-      localStorage.removeItem('dailyTradeLimit')
+    const dl = parseInt(limitIn)
+    const ll = parseFloat(lossIn)
+    const next: SessionConfig = {
+      dailyLimit: dl > 0 ? dl : null,
+      dailyLossLimit: ll > 0 ? ll : null,
+      weeklyGoal: goalIn,
+      weeklyGoalMode: modeIn,
+      accountSize: acctIn,
     }
-    setEditing(false)
+    if (next.dailyLimit != null) localStorage.setItem('dailyTradeLimit', String(next.dailyLimit)); else localStorage.removeItem('dailyTradeLimit')
+    if (next.dailyLossLimit != null) localStorage.setItem('dailyLossLimit', String(next.dailyLossLimit)); else localStorage.removeItem('dailyLossLimit')
+    if (goalIn) localStorage.setItem('weeklyGoal', goalIn); else localStorage.removeItem('weeklyGoal')
+    localStorage.setItem('weeklyGoalMode', modeIn)
+    if (acctIn) localStorage.setItem('accountSize', acctIn)
+    onConfigSaved(next)
+    setConfiguring(false)
   }
 
   return (
-    <div className="card" style={{ padding: '22px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Zap size={12} style={{ color: 'var(--text-muted)' }} />
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Daily trade limit</p>
-        </div>
-        {!editing && (
-          <button onClick={() => { setInput(limit ? String(limit) : ''); setEditing(true) }} style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            {limit ? 'Edit' : 'Set limit'}
-          </button>
-        )}
+    <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '20px 28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Trading session</p>
+        <button onClick={() => (configuring ? setConfiguring(false) : openConfig())}
+          style={{ fontSize: 11, color: configuring ? 'var(--text-muted)' : 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+          {configuring ? 'Cancel' : 'Configure'}
+        </button>
       </div>
 
-      {editing ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <input
-            className="input" type="number" min="1" max="20"
-            placeholder="Max trades per day (e.g. 3)"
-            value={input} onChange={e => setInput(e.target.value)}
-            style={{ fontSize: 13 }} autoFocus
-            onKeyDown={e => e.key === 'Enter' && save()}
-          />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn-primary" style={{ fontSize: 12, flex: 1 }} onClick={save}>Save</button>
-            <button style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setEditing(false)}>Cancel</button>
+      {configuring ? (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={zoneLabel}>Max trades / day</label>
+              <input className="input tabular-nums" type="number" min="1" max="20" placeholder="3" value={limitIn} onChange={e => setLimitIn(e.target.value)} style={{ fontSize: 13 }} />
+            </div>
+            <div>
+              <label style={zoneLabel}>Max loss / day ({symbol})</label>
+              <input className="input tabular-nums" type="number" step="any" min="0" placeholder="50" value={lossIn} onChange={e => setLossIn(e.target.value)} style={{ fontSize: 13 }} />
+            </div>
+            <div>
+              <label style={zoneLabel}>Weekly goal {modeIn === 'percent' ? '(%)' : `(${symbol})`}</label>
+              <input className="input tabular-nums" type="number" step="any" min="0" placeholder={modeIn === 'percent' ? '5' : '250'} value={goalIn} onChange={e => setGoalIn(e.target.value)} style={{ fontSize: 13 }} />
+            </div>
+            <div>
+              <label style={zoneLabel}>Goal type</label>
+              <select className="input" value={modeIn} onChange={e => setModeIn(e.target.value as 'dollar' | 'percent')} style={{ fontSize: 13 }}>
+                <option value="dollar">Fixed amount</option>
+                <option value="percent">% of account</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14 }}>
+            {modeIn === 'percent' && (
+              <div style={{ width: 200 }}>
+                <label style={zoneLabel}>Account size ({symbol})</label>
+                <input className="input tabular-nums" type="number" step="any" min="0" placeholder="10000" value={acctIn} onChange={e => setAcctIn(e.target.value)} style={{ fontSize: 13 }} />
+              </div>
+            )}
+            <button className="btn-primary" style={{ fontSize: 12 }} onClick={save}>Save</button>
           </div>
         </div>
-      ) : limit ? (
-        <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 32, fontWeight: 700, color: textColor, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1 }}>
-              {todayCount}
-            </span>
-            <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 400 }}>/ {limit}</span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>today</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 8 }}>
-            <div style={{ height: '100%', width: `${pct}%`, borderRadius: 2, background: barColor, transition: 'width 0.4s ease' }} />
-          </div>
-          <p style={{ fontSize: 11, color: exceeded ? 'var(--loss)' : atLimit ? '#B45309' : 'var(--text-muted)' }}>
-            {exceeded
-              ? `${todayCount - limit} over limit — stop trading for today`
-              : atLimit
-              ? 'Limit reached — protect your discipline'
-              : `${limit - todayCount} trade${limit - todayCount !== 1 ? 's' : ''} remaining today`}
-          </p>
-        </>
       ) : (
-        <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Set a daily maximum to protect your discipline</p>
+        <div style={{ display: 'flex', alignItems: 'stretch' }}>
+          {/* Status */}
+          <div style={{ paddingRight: 28, minWidth: 150, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: status.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{status.label}</span>
+            </div>
+            {limitReached && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Protect your discipline — stop for today</p>}
+          </div>
+
+          {/* Trades */}
+          <div style={zone}>
+            <p style={zoneLabel}>Trades</p>
+            <p style={{ ...zoneValue, color: dailyLimit != null && todayCount >= dailyLimit ? 'var(--loss)' : 'var(--text-primary)' }}>
+              {todayCount}{dailyLimit != null && dim(` / ${dailyLimit}`)}
+            </p>
+            {dailyLimit != null && (
+              <div style={barTrack}>
+                <div style={{ height: '100%', width: `${tradesPct}%`, borderRadius: 2, background: todayCount >= dailyLimit ? 'var(--loss)' : oneLeft ? '#B45309' : 'var(--accent)', transition: 'width 0.4s ease' }} />
+              </div>
+            )}
+          </div>
+
+          {/* Daily loss */}
+          <div style={zone}>
+            <p style={zoneLabel}>Daily loss</p>
+            <p style={{ ...zoneValue, color: dailyLossLimit != null && lossToday >= dailyLossLimit ? 'var(--loss)' : 'var(--text-primary)' }}>
+              {dailyLossLimit != null
+                ? <>{symbol}{lossToday.toFixed(2)}{dim(` / ${symbol}${dailyLossLimit.toFixed(0)}`)}</>
+                : <span style={{ color: 'var(--text-disabled)', fontWeight: 400 }}>No limit</span>}
+            </p>
+            {dailyLossLimit != null && (
+              <div style={barTrack}>
+                <div style={{ height: '100%', width: `${lossPct}%`, borderRadius: 2, background: lossPct >= 100 ? 'var(--loss)' : lossPct >= 60 ? '#B45309' : 'var(--accent)', transition: 'width 0.4s ease' }} />
+              </div>
+            )}
+          </div>
+
+          {/* Weekly goal */}
+          <div style={zone}>
+            <p style={zoneLabel}>Weekly goal</p>
+            <p style={{ ...zoneValue, color: weekPnl < 0 ? 'var(--loss)' : 'var(--text-primary)' }}>
+              {goalDollar > 0
+                ? <>{formatCurrency(weekPnl, true, symbol)}{dim(` / ${symbol}${goalDollar.toFixed(0)}`)}</>
+                : <span style={{ color: 'var(--text-disabled)', fontWeight: 400 }}>No goal set</span>}
+            </p>
+            {goalDollar > 0 && (
+              <div style={barTrack}>
+                <div style={{ height: '100%', width: `${goalProgress}%`, borderRadius: 2, background: goalProgress >= 100 ? 'var(--profit)' : 'var(--accent)', transition: 'width 0.4s ease' }} />
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -365,10 +469,8 @@ export default function DashboardPage() {
   const [weeklyGoal, setWeeklyGoal]       = useState('')
   const [weeklyGoalMode, setWeeklyGoalMode] = useState<'dollar' | 'percent'>('dollar')
   const [accountSize, setAccountSize]     = useState('')
-  const [editingGoal, setEditingGoal]     = useState(false)
-  const [goalInput, setGoalInput]         = useState('')
-  const [accountInput, setAccountInput]   = useState('')
   const [dailyLimit, setDailyLimit]       = useState<number | null>(null)
+  const [dailyLossLimit, setDailyLossLimit] = useState<number | null>(null)
   const [selectedDay, setSelectedDay]     = useState<string | null>(null)
   const [dayEntry, setDayEntry]           = useState<any>(null)
 
@@ -383,10 +485,12 @@ export default function DashboardPage() {
     const m = localStorage.getItem('weeklyGoalMode') as 'dollar' | 'percent' | null
     const a = localStorage.getItem('accountSize')
     const l = localStorage.getItem('dailyTradeLimit')
+    const ll = localStorage.getItem('dailyLossLimit')
     if (g) setWeeklyGoal(g)
     if (m) setWeeklyGoalMode(m)
     if (a) setAccountSize(a)
     if (l) setDailyLimit(parseInt(l))
+    if (ll) setDailyLossLimit(parseFloat(ll))
 
     supabase.from('trades')
       .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date')
@@ -401,19 +505,9 @@ export default function DashboardPage() {
   const losses       = trades.filter(t => Number(t.pnl) < 0)
   const winRate      = totalTrades > 0 ? (wins.length / totalTrades) * 100 : 0
   const totalReturn  = trades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
-  const totalPnl     = trades.reduce((s, t) => s + Number(t.pnl || 0), 0)
   const grossProfit  = wins.reduce((s, t) => s + Number(t.pnl), 0)
   const grossLoss    = Math.abs(losses.reduce((s, t) => s + Number(t.pnl), 0))
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0
-
-  // ── Streak ──
-  let currentStreak = 0, streakIsWin = false
-  for (let i = 0; i < trades.length; i++) {
-    const w = Number(trades[i].pnl) > 0
-    if (currentStreak === 0) { streakIsWin = w; currentStreak = 1 }
-    else if (w === streakIsWin) currentStreak++
-    else break
-  }
 
   // ── Today ──
   const todayStr    = new Date().toDateString()
@@ -422,6 +516,7 @@ export default function DashboardPage() {
   const todayReturn = todayTrades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
   const todayWins   = todayTrades.filter(t => Number(t.pnl) > 0)
   const todayWinPct = todayTrades.length > 0 ? Math.round(todayWins.length / todayTrades.length * 100) : 0
+  const todayBest   = todayTrades.length > 0 ? Math.max(...todayTrades.map(t => Number(t.pnl || 0))) : null
 
   // ── Equity curve ──
   const curveAll = [...trades].reverse()
@@ -448,7 +543,6 @@ export default function DashboardPage() {
   monday.setHours(0, 0, 0, 0)
   const weekTrades  = trades.filter(t => new Date(t.trade_date || t.created_at) >= monday)
   const weekPnl     = weekTrades.reduce((s, t) => s + Number(t.pnl || 0), 0)
-  const weekReturn  = weekTrades.reduce((s, t) => s + Number(t.return_pct || 0), 0)
   const acctNum     = parseFloat(accountSize)
   const goalDollar  = weeklyGoalMode === 'percent' && acctNum > 0
     ? acctNum * parseFloat(weeklyGoal) / 100
@@ -466,56 +560,23 @@ export default function DashboardPage() {
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
 
-      {/* ── Hero ── */}
-      <div style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '40px 56px 32px' }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-
-          {/* greeting + actions */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{greeting}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* ── Page header ── */}
+      <div style={{ background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-subtle)', padding: '40px 56px 28px' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 40 }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{greeting}</p>
+            <h1 style={{ fontSize: 28, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.025em', marginBottom: 6 }}>Dashboard</h1>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Focus on today. Execute your plan.</p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
               <Link href="/journal" className="btn-secondary" style={{ fontSize: 12 }}>Journal</Link>
               <Link href="/trades/new" className="btn-primary" style={{ fontSize: 12 }}>
                 <Plus size={12} strokeWidth={2.5} />Log trade
               </Link>
             </div>
-          </div>
-
-          {/* hero number + all-time stats */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 40 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 10 }}>
-                <span style={{ fontSize: 64, fontWeight: 700, color: isUp ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                  {isUp ? '+' : ''}{totalReturn.toFixed(2)}%
-                </span>
-                <span style={{ fontSize: 16, color: 'var(--text-muted)', fontWeight: 400, letterSpacing: '-0.01em', paddingBottom: 4 }}>
-                  all-time return
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                {[
-                  { label: 'P&L',           value: formatCurrency(totalPnl, true, symbol),  color: isUp ? 'var(--profit)' : 'var(--loss)' },
-                  { label: 'Win rate',       value: `${winRate.toFixed(1)}%`,     color: winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
-                  { label: 'Trades',         value: String(totalTrades),          color: 'var(--text-primary)' },
-                  { label: 'Profit factor',  value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: 'var(--text-primary)' },
-                  { label: 'Streak',         value: currentStreak > 0 ? `${currentStreak} ${streakIsWin ? 'W' : 'L'}` : '—', color: currentStreak > 0 ? (streakIsWin ? 'var(--profit)' : 'var(--loss)') : 'var(--text-primary)' },
-                ].map((s, i, arr) => (
-                  <div key={s.label} style={{ display: 'flex', alignItems: 'center' }}>
-                    <div style={{ padding: '0 20px', borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', ...(i === 0 ? { paddingLeft: 0 } : {}) }}>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
-                      <p style={{ fontSize: 18, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{s.value}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'right', paddingBottom: 6, flexShrink: 0 }}>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.06em', lineHeight: 1.9 }}>
-                Find · Plan · Wait · Execute · Review · Repeat
-              </p>
-              <p style={{ fontSize: 11, color: 'var(--text-disabled)', fontStyle: 'italic', marginTop: 2 }}>— Moneytaur</p>
-            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>Find · Plan · Wait · Execute · Review · Repeat</p>
+            <p style={{ fontSize: 10, color: 'var(--text-disabled)', fontStyle: 'italic', marginTop: 2 }}>— Moneytaur</p>
           </div>
         </div>
       </div>
@@ -523,22 +584,74 @@ export default function DashboardPage() {
       {/* ── Main content ── */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '32px 56px 64px', display: 'flex', flexDirection: 'column', gap: 40 }}>
 
-        {/* Today strip */}
-        {todayTrades.length > 0 && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            {[
-              { label: 'Today P&L',   value: formatCurrency(todayPnl, true, symbol),  color: todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
-              { label: 'Win rate',    value: `${todayWinPct}%`, color: todayWinPct >= 50 ? 'var(--profit)' : 'var(--loss)' },
-              { label: 'Return',      value: `${todayReturn >= 0 ? '+' : ''}${todayReturn.toFixed(2)}%`, color: todayReturn >= 0 ? 'var(--profit)' : 'var(--loss)' },
-              { label: 'Trades',      value: dailyLimit ? `${todayTrades.length} / ${dailyLimit}` : String(todayTrades.length), color: dailyLimit && todayTrades.length > dailyLimit ? 'var(--loss)' : 'var(--text-primary)' },
-            ].map(s => (
-              <div key={s.label} style={{ flex: 1, padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
-                <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 5 }}>{s.label}</p>
-                <p style={{ fontSize: 20, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+        {/* 1 · Can I still trade today? */}
+        <TradingSession
+          symbol={symbol}
+          todayCount={todayTrades.length}
+          todayPnl={todayPnl}
+          weekPnl={weekPnl}
+          goalDollar={goalDollar}
+          goalProgress={goalProgress}
+          weeklyGoal={weeklyGoal}
+          weeklyGoalMode={weeklyGoalMode}
+          accountSize={accountSize}
+          dailyLimit={dailyLimit}
+          dailyLossLimit={dailyLossLimit}
+          onConfigSaved={c => {
+            setDailyLimit(c.dailyLimit)
+            setDailyLossLimit(c.dailyLossLimit)
+            setWeeklyGoal(c.weeklyGoal)
+            setWeeklyGoalMode(c.weeklyGoalMode)
+            if (c.accountSize) setAccountSize(c.accountSize)
+          }}
+        />
+
+        {/* 2 · How is today going?  /  3 · How am I doing overall? */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr' }}>
+          <div style={{ paddingRight: 44 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>Today</p>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: todayTrades.length > 0 ? 22 : 10 }}>
+              <span style={{ fontSize: 44, fontWeight: 700, color: todayTrades.length === 0 ? 'var(--text-disabled)' : todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {formatCurrency(todayPnl, true, symbol)}
+              </span>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>P&L today</span>
+            </div>
+            {todayTrades.length > 0 ? (
+              <div style={{ display: 'flex' }}>
+                {[
+                  { label: 'Win rate',   value: `${todayWinPct}%`, color: todayWinPct >= 50 ? 'var(--profit)' : 'var(--loss)' },
+                  { label: 'Return',     value: `${todayReturn >= 0 ? '+' : ''}${todayReturn.toFixed(2)}%`, color: todayReturn >= 0 ? 'var(--profit)' : 'var(--loss)' },
+                  { label: 'Best trade', value: todayBest != null ? formatCurrency(todayBest, true, symbol) : '—', color: todayBest != null && todayBest > 0 ? 'var(--profit)' : 'var(--text-primary)' },
+                ].map((s, i, arr) => (
+                  <div key={s.label} style={{ padding: '0 24px', borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', ...(i === 0 ? { paddingLeft: 0 } : {}) }}>
+                    <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 5 }}>{s.label}</p>
+                    <p style={{ fontSize: 18, fontWeight: 600, color: s.color, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{s.value}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>No trades yet today</p>
+            )}
           </div>
-        )}
+
+          {/* All-time snapshot — deliberately quieter */}
+          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 44 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>All-time</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 24px' }}>
+              {[
+                { label: 'Return',        value: `${isUp ? '+' : ''}${totalReturn.toFixed(2)}%`, color: isUp ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'Trades',        value: String(totalTrades), color: undefined },
+                { label: 'Win rate',      value: `${winRate.toFixed(1)}%`, color: undefined },
+                { label: 'Profit factor', value: profitFactor > 0 ? `${profitFactor.toFixed(2)}×` : '—', color: undefined },
+              ].map(s => (
+                <div key={s.label}>
+                  <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-disabled)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: s.color ?? 'var(--text-secondary)', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {/* Equity curve */}
         <div>
@@ -625,93 +738,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bottom: Daily limit + Weekly goal + Insight */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 24 }}>
-
-          {/* Daily limit */}
-          <DailyLimitWidget
-            todayCount={todayTrades.length}
-            limit={dailyLimit}
-            onSetLimit={setDailyLimit}
-          />
-
-          {/* Weekly goal */}
-          <div className="card" style={{ padding: '22px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Target size={12} style={{ color: 'var(--text-muted)' }} />
-                <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Weekly goal</p>
-              </div>
-              {!editingGoal && (
-                <button onClick={() => { setGoalInput(weeklyGoal); setAccountInput(accountSize); setEditingGoal(true) }} style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                  {weeklyGoal ? 'Edit' : 'Set goal'}
-                </button>
-              )}
-            </div>
-
-            {editingGoal ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 3, background: 'var(--bg-elevated)', borderRadius: 5, padding: 2, border: '1px solid var(--border-subtle)', alignSelf: 'flex-start' }}>
-                  {(['dollar', 'percent'] as const).map(m => (
-                    <button key={m} onClick={() => setWeeklyGoalMode(m)} style={{ padding: '2px 10px', borderRadius: 4, fontSize: 11, fontWeight: 500, cursor: 'pointer', background: weeklyGoalMode === m ? 'var(--bg-surface)' : 'transparent', color: weeklyGoalMode === m ? 'var(--text-primary)' : 'var(--text-muted)', border: weeklyGoalMode === m ? '1px solid var(--border-subtle)' : '1px solid transparent' }}>
-                      {m === 'dollar' ? '$ Fixed' : '% Account'}
-                    </button>
-                  ))}
-                </div>
-                <input className="input" type="number" placeholder={weeklyGoalMode === 'percent' ? '5  (= 5%)' : '500'} value={goalInput} onChange={e => setGoalInput(e.target.value)} style={{ fontSize: 13 }} autoFocus />
-                {weeklyGoalMode === 'percent' && <input className="input" type="number" placeholder="Account size ($)" value={accountInput} onChange={e => setAccountInput(e.target.value)} style={{ fontSize: 13 }} />}
-                {weeklyGoalMode === 'percent' && goalInput && accountInput && <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>= ${(parseFloat(accountInput) * parseFloat(goalInput) / 100).toFixed(2)} target</p>}
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn-primary" style={{ fontSize: 12, flex: 1 }} onClick={() => {
-                    setWeeklyGoal(goalInput); localStorage.setItem('weeklyGoal', goalInput)
-                    localStorage.setItem('weeklyGoalMode', weeklyGoalMode)
-                    if (accountInput) { setAccountSize(accountInput); localStorage.setItem('accountSize', accountInput) }
-                    setEditingGoal(false)
-                  }}>Save</button>
-                  <button style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => setEditingGoal(false)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
-                  <span style={{ fontSize: 32, fontWeight: 700, color: weekPnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.03em', lineHeight: 1 }}>
-                    {formatCurrency(weekPnl, true, symbol)}
-                  </span>
-                  {weekReturn !== 0 && (
-                    <span style={{ fontSize: 13, fontWeight: 500, color: weekReturn >= 0 ? 'var(--profit)' : 'var(--loss)', opacity: 0.8 }}>
-                      {weekReturn >= 0 ? '+' : ''}{weekReturn.toFixed(2)}%
-                    </span>
-                  )}
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>this week</span>
-                </div>
-                {goalDollar > 0 ? (
-                  <>
-                    <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-elevated)', overflow: 'hidden', marginBottom: 8 }}>
-                      <div style={{ height: '100%', width: `${goalProgress}%`, borderRadius: 2, background: goalProgress >= 100 ? 'var(--profit)' : 'var(--accent)', transition: 'width 0.5s ease' }} />
-                    </div>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      {symbol}{weekPnl.toFixed(2)} of {symbol}{goalDollar.toFixed(2)}{weeklyGoalMode === 'percent' && weeklyGoal ? ` (${weeklyGoal}% goal)` : ''} &nbsp;·&nbsp;
-                      <span style={{ fontWeight: 600, color: goalProgress >= 100 ? 'var(--profit)' : 'var(--text-secondary)' }}>{goalProgress.toFixed(0)}%</span>
-                    </p>
-                  </>
-                ) : (
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Set a weekly target to track your progress</p>
-                )}
-              </>
-            )}
+        {/* AI Coach */}
+        <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>AI Coach</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pattern analysis from your trade history</p>
           </div>
-
-          {/* Insight + Coach */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>AI Coach</p>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pattern analysis from your trade history</p>
-              </div>
-              <Link href="/coach" style={{ fontSize: 12, color: 'var(--ai-accent)', textDecoration: 'none', fontWeight: 600, flexShrink: 0, marginLeft: 16 }}>Open →</Link>
-            </div>
-          </div>
-
+          <Link href="/coach" style={{ fontSize: 12, color: 'var(--ai-accent)', textDecoration: 'none', fontWeight: 600, flexShrink: 0, marginLeft: 16 }}>Open →</Link>
         </div>
       </div>
 
