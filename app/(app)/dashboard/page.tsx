@@ -8,6 +8,22 @@ import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
 
+// ─── Weekly focus (synced with Notebook) ─────────────────────────────────────
+
+function isoWeekNum(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+  const day = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.valueOf() - yearStart.valueOf()) / 86400000 + 1) / 7)
+}
+
+/** Slug of this week's Weekly Focus document in the Notebook */
+function currentFocusSlug(): string {
+  const now = new Date()
+  return `focus-${now.getFullYear()}-${String(isoWeekNum(now)).padStart(2, '0')}`
+}
+
 // ─── P&L Calendar ────────────────────────────────────────────────────────────
 
 function PnLCalendar({ trades, onDayClick }: { trades: any[]; onDayClick: (date: string) => void }) {
@@ -473,6 +489,7 @@ export default function DashboardPage() {
   const [dailyLossLimit, setDailyLossLimit] = useState<number | null>(null)
   const [selectedDay, setSelectedDay]     = useState<string | null>(null)
   const [dayEntry, setDayEntry]           = useState<any>(null)
+  const [weeklyFocus, setWeeklyFocus]     = useState<string | null>(null)
 
   useEffect(() => {
     if (!selectedDay) return
@@ -497,6 +514,12 @@ export default function DashboardPage() {
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .then(({ data }) => { setTrades(data || []); setLoading(false) })
+
+    supabase.from('notebook_pages')
+      .select('content')
+      .eq('slug', currentFocusSlug())
+      .maybeSingle()
+      .then(({ data }) => setWeeklyFocus(data?.content ?? null))
   }, [])
 
   // ── All-time stats ──
@@ -606,15 +629,15 @@ export default function DashboardPage() {
           }}
         />
 
-        {/* 2 · How is today going?  /  3 · How am I doing overall? */}
-        <div className="m-grid-1 today-split" style={{ display: 'grid', gridTemplateColumns: '1.8fr 1fr' }}>
-          <div style={{ paddingRight: 44 }}>
+        {/* 2 · How is today going?  /  weekly focus  /  3 · overall */}
+        <div className="m-grid-1 today-split" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr' }}>
+          <div style={{ paddingRight: 36 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>Today</p>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: todayTrades.length > 0 ? 22 : 10 }}>
-              <span style={{ fontSize: 44, fontWeight: 700, color: todayTrades.length === 0 ? 'var(--text-disabled)' : todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: todayTrades.length > 0 ? 20 : 10 }}>
+              <span style={{ fontSize: 30, fontWeight: 600, color: todayTrades.length === 0 ? 'var(--text-disabled)' : todayPnl >= 0 ? 'var(--profit)' : 'var(--loss)', letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
                 {formatCurrency(todayPnl, true, symbol)}
               </span>
-              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>P&L today</span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>P&L today</span>
             </div>
             {todayTrades.length > 0 ? (
               <div style={{ display: 'flex' }}>
@@ -634,8 +657,25 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* Weekly focus — mirrors this week's Notebook document */}
+          <div className="alltime-block" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 36, paddingRight: 36 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Weekly focus</p>
+              <Link href={`/notebook?folder=weekly-focus&note=${currentFocusSlug()}`} style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none' }}>
+                {weeklyFocus ? 'Edit →' : 'Set →'}
+              </Link>
+            </div>
+            {weeklyFocus ? (
+              <p style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                {weeklyFocus.replace(/!\[[^\]]*\]\([^)]+\)/g, '').replace(/[#*`]/g, '').trim()}
+              </p>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>No focus set for this week</p>
+            )}
+          </div>
+
           {/* All-time snapshot — deliberately quieter */}
-          <div className="alltime-block" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 44 }}>
+          <div className="alltime-block" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 36 }}>
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-disabled)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>All-time</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px 24px' }}>
               {[

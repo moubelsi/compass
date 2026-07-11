@@ -974,6 +974,16 @@ export default function NotebookPage() {
   const [activeFolder,  setActiveFolder]  = useState<string | null>(null)
   const [selectedNote,  setSelectedNote]  = useState<string | null>(null)
 
+  // Deep links: /notebook?folder=weekly-focus&note=focus-2026-28
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const folder = params.get('folder')
+    const note   = params.get('note')
+    if (folder) setActiveFolder(folder)
+    if (note) setSelectedNote(note)
+    if (folder || note) window.history.replaceState(null, '', window.location.pathname)
+  }, [])
+
   useEffect(() => {
     async function load() {
       const since = new Date(); since.setFullYear(since.getFullYear() - 2)
