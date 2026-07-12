@@ -25,7 +25,8 @@ function pnlBarShape(props: any) {
 function winRateBarShape(props: any) {
   const { x, y, width, height } = props
   if (!width || !height) return null
-  const fill = Number(props.value) >= 50 ? 'var(--profit)' : 'var(--loss)'
+  const raw = Number(props.payload?.winRate ?? props.value)
+  const fill = raw >= 50 ? 'var(--profit)' : 'var(--loss)'
   return <rect x={x} y={y} width={width} height={height} rx={3} fill={fill} fillOpacity={0.8} />
 }
 
@@ -109,7 +110,7 @@ export default function AnalyticsPage() {
     async function load() {
       const { data } = await supabase
         .from('trades')
-        .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence, followed_plan, notes, screenshot_url')
+        .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence, followed_plan, notes, screenshot_url, broker_metadata')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
       setAllTrades(data || [])
@@ -181,6 +182,28 @@ export default function AnalyticsPage() {
     calMap[date].trades++
   })
   const calendarData = Object.entries(calMap).map(([date, v]) => ({ date, ...v }))
+
+  // Timing — hour of day, from broker-synced open times
+  const hourMap: Record<number, { pnl: number; count: number; wins: number }> = {}
+  trades.forEach(t => {
+    const iso = t.broker_metadata?.open_time
+    if (!iso) return
+    const h = new Date(iso).getHours()
+    if (!hourMap[h]) hourMap[h] = { pnl: 0, count: 0, wins: 0 }
+    hourMap[h].pnl += Number(t.pnl || 0)
+    hourMap[h].count++
+    if (Number(t.pnl) > 0) hourMap[h].wins++
+  })
+  const hourlyData = Object.entries(hourMap)
+    .map(([h, v]) => ({
+      name: `${String(h).padStart(2, '0')}h`,
+      hour: Number(h),
+      pnl: Number(v.pnl.toFixed(2)),
+      count: v.count,
+      winRate: Number((v.wins / v.count * 100).toFixed(1)),
+    }))
+    .sort((a, b) => a.hour - b.hour)
+  const hasTimingData = hourlyData.length > 1
 
   // P&L by strategy
   const byStrategy = trades.reduce((acc: any, t) => {
@@ -395,6 +418,45 @@ export default function AnalyticsPage() {
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--profit)', display: 'inline-block' }} />Wins</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--loss)', display: 'inline-block' }} />Losses</span>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Timing — hour of day */}
+        {hasTimingData && (
+          <div>
+            <SectionHeader title="Timing" sub="Performance by hour of day, from broker-synced open times (your local time)" />
+            <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>P&L by hour</p>
+                <div className="card" style={{ padding: '20px 20px 12px', height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+                      {chartShared.cartesian}
+                      <XAxis dataKey="name" {...chartShared.xProps} />
+                      <YAxis {...chartShared.yProps} tickFormatter={v => `${symbol}${v}`} width={52} />
+                      <ReferenceLine y={0} stroke="var(--border-default)" strokeWidth={1} />
+                      <Tooltip content={<PnlTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Bar dataKey="pnl" shape={pnlBarShape} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>Win rate by hour</p>
+                <div className="card" style={{ padding: '20px 20px 12px', height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={hourlyData} margin={{ top: 4, right: 4, bottom: 4, left: -10 }}>
+                      {chartShared.cartesian}
+                      <XAxis dataKey="name" {...chartShared.xProps} />
+                      <YAxis {...chartShared.yProps} domain={[0, 100]} tickFormatter={v => `${v}%`} />
+                      <ReferenceLine y={50} stroke="var(--border-default)" strokeWidth={1} strokeDasharray="3 3" />
+                      <Tooltip content={<BarTooltip symbol={symbol} />} cursor={{ fill: 'var(--bg-elevated)' }} />
+                      <Bar dataKey="winRate" shape={winRateBarShape} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
