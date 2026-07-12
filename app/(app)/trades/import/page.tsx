@@ -402,14 +402,108 @@ function parseMT5CSV(text: string): ParsedTrade[] {
   return trades
 }
 
+// ─── Generic parser — MEXC, Bybit, Binance, TradingView, prop firms… ─────────
+// Alias-driven: any CSV with a symbol, side, entry/exit price and PnL works.
+
+function cleanGenericSymbol(raw: string): string {
+  return raw
+    .replace(/[-_](swap|perp|perpetual)$/i, '')
+    .replace(/[-_]\d{6,8}$/i, '')
+    .replace(/[-_/]/g, '')
+    .toUpperCase()
+    .trim()
+}
+
+function parseGenericCSV(text: string): ParsedTrade[] {
+  const t = text.startsWith('﻿') ? text.slice(1) : text.startsWith('ï»¿') ? text.slice(3) : text
+  const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lines.length < 2) throw new Error('File appears empty — needs at least a header and one row.')
+
+  const sample = lines.find(l => l.includes('\t') || l.includes(';') || l.includes(',')) ?? lines[0]
+  const sep = sample.includes('\t') ? '\t'
+    : (sample.match(/;/g) || []).length >= (sample.match(/,/g) || []).length ? ';' : ','
+
+  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, '').replace(/\s*\(.*?\)\s*$/, '').toLowerCase().replace(/\./g, '').trim()
+
+  const symbolAliases = ['symbol', 'futures', 'instrument', 'instrument id', 'contract', 'contracts', 'pair', 'market', 'ticker', 'asset', 'product']
+  let headerRowIdx = -1
+  let cols: string[] = []
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const candidate = lines[i].split(sep).map(clean)
+    if (symbolAliases.some(a => candidate.includes(a))) { headerRowIdx = i; cols = candidate; break }
+  }
+  if (headerRowIdx < 0) {
+    const detected = lines.slice(0, 2).map(l => l.split(sep).map(clean).join(' | ')).join('\n')
+    throw new Error(`Cannot find a header row with a Symbol/Futures/Contract column.\n\nDetected:\n${detected}`)
+  }
+  if (cols.length > 0) cols[0] = cols[0].replace(/^[^a-z0-9]+/, '')
+
+  const find = (...names: string[]) => names.reduce((f, n) => f >= 0 ? f : cols.indexOf(n), -1)
+
+  const symbolIdx = find(...symbolAliases)
+  const dirIdx    = find('direction', 'side', 'position side', 'pos side', 'trade side', 'open direction', 'position', 'type', 'action', 'buy/sell')
+  const entryIdx  = find('avg open price', 'open avg price', 'avg entry price', 'open price', 'entry price', 'opening avg price', 'avg entry', 'entry', 'open')
+  const exitIdx   = find('avg close price', 'close avg price', 'avg exit price', 'close price', 'exit price', 'closing avg price', 'avg exit', 'exit', 'close')
+  const pnlIdx    = find('closed p/l', 'closing pnl', 'closed pnl', 'realized pnl', 'realised pnl', 'realized p&l', 'realized profit', 'net profit', 'net p&l', 'pnl', 'profit', 'p/l', 'p&l', 'gain/loss')
+  const retIdx    = find('roi', 'pnl%', 'pnl %', 'pnl ratio', 'return %', 'return', 'yield')
+  const closeIdx  = find('close time', 'closing time', 'closed time', 'close date', 'closed at', 'update time', 'exit time', 'settlement time', 'time', 'date', 'date/time')
+  const openIdx   = find('open time', 'opening time', 'entry time', 'create time', 'created at', 'open date')
+
+  if (symbolIdx < 0) throw new Error(`Cannot find a Symbol column. Detected columns: ${cols.slice(0, 8).join(', ')}`)
+  if (dirIdx < 0)    throw new Error(`Cannot find a Direction/Side column. Detected columns: ${cols.slice(0, 8).join(', ')}`)
+  if (entryIdx < 0 || exitIdx < 0) throw new Error(`Cannot find entry/exit price columns. Detected columns: ${cols.slice(0, 10).join(', ')}`)
+
+  const num = (s: string | undefined) => parseFloat((s ?? '').replace(/,/g, '').replace(/[^\d.eE+-]/g, ''))
+
+  const trades: ParsedTrade[] = []
+  for (let i = headerRowIdx + 1; i < lines.length; i++) {
+    const cells = lines[i].split(sep).map(c => c.trim().replace(/^["']|["']$/g, ''))
+    if (cells.length < 3) continue
+
+    const rawSymbol = cells[symbolIdx]
+    if (!rawSymbol) continue
+    const symbol = cleanGenericSymbol(rawSymbol)
+
+    const rawDir = (cells[dirIdx] ?? '').toLowerCase()
+    const direction: 'LONG' | 'SHORT' | null =
+      rawDir.includes('long') || rawDir.includes('buy') ? 'LONG'
+      : rawDir.includes('short') || rawDir.includes('sell') ? 'SHORT'
+      : null
+    if (!direction) continue
+
+    const entry_price = num(cells[entryIdx])
+    const exit_price  = num(cells[exitIdx])
+    if (isNaN(entry_price) || isNaN(exit_price)) continue
+
+    const pnlRaw = pnlIdx >= 0 ? num(cells[pnlIdx]) : NaN
+    const pnl = isNaN(pnlRaw) ? null : pnlRaw
+
+    let return_pct: number | null = null
+    if (retIdx >= 0) {
+      const raw = cells[retIdx] ?? ''
+      const n = parseFloat(raw.replace(/,/g, '').replace('%', ''))
+      if (!isNaN(n)) return_pct = raw.includes('%') || Math.abs(n) > 1 ? n : n * 100
+    }
+
+    const rawDate    = closeIdx >= 0 ? cells[closeIdx] : openIdx >= 0 ? cells[openIdx] : null
+    const trade_date = parseTradeDate(rawDate)
+
+    trades.push({ symbol, direction, entry_price, exit_price, pnl, return_pct, trade_date, raw_date: rawDate })
+  }
+
+  if (trades.length === 0) throw new Error('No valid rows found. The file needs a symbol, a long/short (or buy/sell) side and numeric entry/exit prices per row.')
+  return trades
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-type Source = 'ctrader' | 'okx' | 'mt5'
+type Source = 'ctrader' | 'okx' | 'mt5' | 'generic'
 
 const SOURCES: { id: Source; label: string; note: string }[] = [
   { id: 'ctrader', label: 'cTrader', note: 'Closed Positions export' },
   { id: 'okx',     label: 'OKX',     note: 'Positions History export' },
   { id: 'mt5',     label: 'MT5',     note: 'Account History → Deals CSV' },
+  { id: 'generic', label: 'Other',   note: 'MEXC, Bybit, Binance & more' },
 ]
 
 const INSTRUCTIONS: Record<Source, { title: string; steps: string[] }> = {
@@ -440,6 +534,15 @@ const INSTRUCTIONS: Record<Source, { title: string; steps: string[] }> = {
       'Choose CSV format and upload here',
     ],
   },
+  generic: {
+    title: 'Any closed-positions CSV',
+    steps: [
+      'Export your closed positions / position history as CSV (MEXC: Futures → Position History → Export)',
+      'The file needs columns for: symbol, side (long/short), entry price, exit price — PnL and close time are picked up too',
+      'Column names are matched flexibly, so most broker exports work as-is',
+      'Heads-up: rows are imported as manual trades — pick a date range that does not overlap trades already synced via API',
+    ],
+  },
 }
 
 export default function ImportPage() {
@@ -463,7 +566,7 @@ export default function ImportPage() {
     reader.onload = e => {
       try {
         const text = e.target?.result as string
-        const parsed = source === 'okx' ? parseOKXCSV(text) : source === 'mt5' ? parseMT5CSV(text) : parseCTraderCSV(text)
+        const parsed = source === 'okx' ? parseOKXCSV(text) : source === 'mt5' ? parseMT5CSV(text) : source === 'generic' ? parseGenericCSV(text) : parseCTraderCSV(text)
         setTrades(parsed)
         setStep('preview')
       } catch (err: any) {
