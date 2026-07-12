@@ -477,7 +477,7 @@ function JournalPageInner() {
     <div style={{ background: 'var(--journal-ivory)', minHeight: '100vh' }}>
 
       {/* ── Header ── */}
-      <div style={{ position: 'relative', overflow: 'hidden', padding: '36px 56px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--journal-ivory-dark)' }}>
+      <div className="m-pad" style={{ position: 'relative', overflow: 'hidden', padding: '36px 56px 28px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--journal-ivory-dark)' }}>
         <div style={{ position: 'absolute', top: -20, right: 40 }}>
           <BotanicalOrnament opacity={0.12} size={200} />
         </div>
@@ -488,8 +488,8 @@ function JournalPageInner() {
         </div>
       </div>
 
-      {/* ── Two-column body ── */}
-      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '28px 56px 72px', display: 'grid', gridTemplateColumns: '1fr 296px', gap: 32, alignItems: 'start' }}>
+      {/* ── Two-column body (stacks on mobile) ── */}
+      <div className="m-grid-1 m-pad" style={{ maxWidth: 1160, margin: '0 auto', padding: '28px 56px 72px', display: 'grid', gridTemplateColumns: '1fr 296px', gap: 32, alignItems: 'start' }}>
 
         {/* ════════════════════ LEFT COLUMN ════════════════════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20, minWidth: 0 }}>
