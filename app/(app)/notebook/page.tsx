@@ -370,7 +370,8 @@ function MarkdownView({ text }: { text: string }) {
   let k = 0
   const flushList = () => {
     if (list) {
-      out.push(<ul key={k++} style={{ margin: '4px 0 14px', paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 6 }}>{list}</ul>)
+      // listStyle set explicitly — the Tailwind preflight resets it to none
+      out.push(<ul key={k++} style={{ margin: '4px 0 14px', paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 6, listStyle: 'disc' }}>{list}</ul>)
       list = null
     }
   }
