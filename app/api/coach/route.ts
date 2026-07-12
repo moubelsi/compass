@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createSupabaseServer } from '@/lib/supabase-server'
+import { computeDiscipline } from '@/lib/discipline'
 
 interface TradeStat {
   count: number
@@ -62,6 +63,32 @@ function buildSummary(trades: any[]) {
   const planned = trades.filter(t => t.trade_type === 'planned')
   const impulsive = trades.filter(t => t.trade_type === 'impulsive')
 
+  // Discipline score (same formula the app shows in Analytics)
+  const discipline = computeDiscipline(trades)
+
+  // Timing & costs — only available for broker-synced trades
+  const timed = trades.filter(t => t.broker_metadata?.open_time)
+  const hourWr = (group: any[]) => group.length > 0 ? (group.filter(t => Number(t.pnl) > 0).length / group.length * 100).toFixed(1) : 'N/A'
+  const morning   = timed.filter(t => new Date(t.broker_metadata.open_time).getHours() < 12)
+  const afternoon = timed.filter(t => new Date(t.broker_metadata.open_time).getHours() >= 12)
+  const durAvg = (group: any[]) => {
+    const withDur = group.filter(t => t.broker_metadata?.duration_ms != null)
+    if (withDur.length === 0) return null
+    return withDur.reduce((s, t) => s + Number(t.broker_metadata.duration_ms), 0) / withDur.length / 60000
+  }
+  const winHoldMin  = durAvg(timed.filter(t => Number(t.pnl) > 0))
+  const lossHoldMin = durAvg(timed.filter(t => Number(t.pnl) < 0))
+  const totalFees = trades.reduce((s, t) => s + Math.abs(Number(t.broker_metadata?.commission ?? 0)) + Math.abs(Number(t.broker_metadata?.swap ?? 0)), 0)
+
+  const timing = timed.length >= 5 ? {
+    tradedCount: timed.length,
+    morning:   { count: morning.length,   winRate: hourWr(morning) },
+    afternoon: { count: afternoon.length, winRate: hourWr(afternoon) },
+    winHoldMin:  winHoldMin  != null ? winHoldMin.toFixed(0)  : null,
+    lossHoldMin: lossHoldMin != null ? lossHoldMin.toFixed(0) : null,
+    totalFees: totalFees > 0 ? totalFees.toFixed(2) : null,
+  } : null
+
   const confTrades = trades.filter(t => t.confidence != null)
   const confBands = confTrades.length >= 5 ? [
     { label: 'Low (1–4)',  group: confTrades.filter(t => Number(t.confidence) <= 4) },
@@ -87,6 +114,8 @@ function buildSummary(trades: any[]) {
     planned: { ...dirStat(planned), count: planned.length },
     impulsive: { ...dirStat(impulsive), count: impulsive.length },
     confBands,
+    discipline,
+    timing,
   }
 }
 
@@ -127,6 +156,28 @@ function buildPrompt(s: ReturnType<typeof buildSummary>): string {
     s.confBands.forEach(b => lines.push(`- ${b.label}: ${b.count} trades, ${b.winRate}% win rate`))
   }
 
+  if (s.discipline.score != null) {
+    lines.push(
+      '',
+      'DISCIPLINE:',
+      `- Discipline score: ${s.discipline.score}/100 (weights: planned 40, followed plan 30, confidence 20, journaled 10)`,
+      `- Planned trades: ${Math.round(s.discipline.plannedPct * 100)}% · Followed plan: ${Math.round(s.discipline.followedPct * 100)}% · Journaled: ${Math.round(s.discipline.journalPct * 100)}%`,
+    )
+  }
+
+  if (s.timing) {
+    lines.push(
+      '',
+      `TIMING & COSTS (from ${s.timing.tradedCount} broker-synced trades, local time):`,
+      `- Morning (before 12:00): ${s.timing.morning.count} trades, ${s.timing.morning.winRate}% win rate`,
+      `- Afternoon (after 12:00): ${s.timing.afternoon.count} trades, ${s.timing.afternoon.winRate}% win rate`,
+    )
+    if (s.timing.winHoldMin != null && s.timing.lossHoldMin != null)
+      lines.push(`- Avg hold time: winners ${s.timing.winHoldMin} min vs losers ${s.timing.lossHoldMin} min`)
+    if (s.timing.totalFees != null)
+      lines.push(`- Total commissions + funding fees paid: ${s.timing.totalFees}`)
+  }
+
   lines.push(
     '',
     'Return ONLY a JSON array — no markdown, no code fences, just raw JSON — with this exact structure:',
@@ -159,7 +210,7 @@ export async function POST() {
 
   const { data: trades } = await supabase
     .from('trades')
-    .select('symbol, direction, pnl, return_pct, rr, strategy, trade_type, confidence, followed_plan, trade_date, created_at')
+    .select('symbol, direction, pnl, return_pct, rr, strategy, trade_type, confidence, followed_plan, trade_date, created_at, notes, screenshot_url, broker_metadata')
     .eq('user_id', user.id)
     .order('trade_date', { ascending: false, nullsFirst: false })
     .limit(300)
