@@ -8,6 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tool
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr, hasContent } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -361,11 +362,13 @@ function JournalPageInner() {
     supabase.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(90)
       .then(({ data }) => setPastEntries(data || []))
     const since = new Date(Date.now() - 90 * 86400000).toISOString()
-    supabase.from('trades')
+    fetchAllRows((from, to) => supabase.from('trades')
       .select('id, symbol, pnl, return_pct, rr, strategy, trade_date, created_at, direction, notes, screenshot_url, followed_plan, trade_type, confidence')
       .gte('created_at', since)
       .order('created_at', { ascending: true })
-      .then(({ data }) => setRecentTrades(data || []))
+      .range(from, to))
+      .then(data => setRecentTrades(data))
+      .catch(() => setRecentTrades([]))
   }, [])
 
   useEffect(() => {

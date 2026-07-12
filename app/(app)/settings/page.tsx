@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useCurrency, CURRENCY_OPTIONS } from '@/lib/useCurrency'
 import { formatCurrency } from '@/lib/utils'
 import { BrokerConnections } from '@/components/settings/BrokerConnections'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 export default function SettingsPage() {
   const { symbol, setCurrency }         = useCurrency()
@@ -27,12 +28,12 @@ export default function SettingsPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: { user } }, { data }] = await Promise.all([
+      const [{ data: { user } }, tradeRows] = await Promise.all([
         supabase.auth.getUser(),
-        supabase.from('trades').select('*').order('trade_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }),
+        fetchAllRows((from, to) => supabase.from('trades').select('*').order('trade_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).range(from, to)).catch(() => []),
       ])
       setEmail(user?.email ?? '')
-      setTrades(data || [])
+      setTrades(tradeRows)
       setLoadingUser(false)
     }
     load()

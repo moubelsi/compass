@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency } from '@/lib/utils'
 import { computeDiscipline } from '@/lib/discipline'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 // Shape helpers replacing deprecated <Cell> — color each bar based on its value
 function pnlBarShape(props: any) {
@@ -108,12 +109,13 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      const data = await fetchAllRows((from, to) => supabase
         .from('trades')
         .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence, followed_plan, notes, screenshot_url, broker_metadata')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
-      setAllTrades(data || [])
+        .range(from, to)).catch(() => [])
+      setAllTrades(data)
       setLoading(false)
     }
     load()

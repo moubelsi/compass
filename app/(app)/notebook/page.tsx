@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } fro
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -989,11 +990,11 @@ export default function NotebookPage() {
     async function load() {
       const since = new Date(); since.setFullYear(since.getFullYear() - 2)
       const sinceStr = since.toISOString().slice(0, 10)
-      const [{ data: tData }, { data: kData }] = await Promise.all([
-        supabase.from('trades').select('id, symbol, direction, pnl, return_pct, rr, trade_date, created_at').gte('trade_date', sinceStr).order('trade_date'),
+      const [tData, { data: kData }] = await Promise.all([
+        fetchAllRows((from, to) => supabase.from('trades').select('id, symbol, direction, pnl, return_pct, rr, trade_date, created_at').gte('trade_date', sinceStr).order('trade_date').range(from, to)).catch(() => []),
         supabase.from('notebook_pages').select('*'),
       ])
-      setTrades((tData || []) as Trade[])
+      setTrades(tData as Trade[])
       const map: Record<string, NotebookPage> = {}
       ;(kData || []).forEach((p: NotebookPage) => { map[p.slug] = p })
 

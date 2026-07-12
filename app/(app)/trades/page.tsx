@@ -6,6 +6,7 @@ import { Search, SlidersHorizontal, Upload, Star, Zap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr, hasContent } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,14 +105,16 @@ export default function TradesPage() {
       } catch {}
     }
 
-    supabase.from('trades')
+    fetchAllRows((from, to) => supabase.from('trades')
       .select('*')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setTrades((data as Trade[]) || [])
+      .range(from, to))
+      .then(data => {
+        setTrades(data as Trade[])
         setLoading(false)
       })
+      .catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {

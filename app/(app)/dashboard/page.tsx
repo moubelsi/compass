@@ -7,6 +7,7 @@ import { EquityCurve } from '@/components/charts/EquityCurve'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
+import { fetchAllRows } from '@/lib/fetchAll'
 
 // ─── Weekly focus (synced with Notebook) ─────────────────────────────────────
 
@@ -509,11 +510,13 @@ export default function DashboardPage() {
     if (l) setDailyLimit(parseInt(l))
     if (ll) setDailyLossLimit(parseFloat(ll))
 
-    supabase.from('trades')
+    fetchAllRows((from, to) => supabase.from('trades')
       .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
-      .then(({ data }) => { setTrades(data || []); setLoading(false) })
+      .range(from, to))
+      .then(data => { setTrades(data); setLoading(false) })
+      .catch(() => setLoading(false))
 
     supabase.from('notebook_pages')
       .select('content')
