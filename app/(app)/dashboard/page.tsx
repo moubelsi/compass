@@ -666,9 +666,24 @@ export default function DashboardPage() {
               </Link>
             </div>
             {weeklyFocus ? (
-              <p style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
-                {weeklyFocus.replace(/!\[[^\]]*\]\([^)]+\)/g, '').replace(/[#*`]/g, '').trim()}
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {weeklyFocus
+                  .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+                  .split('\n')
+                  .map(l => l.trim())
+                  .filter(Boolean)
+                  .slice(0, 5)
+                  .map((line, i) => {
+                    const bullet = line.match(/^[-*]\s+(.*)/)
+                    const text = (bullet ? bullet[1] : line).replace(/^#{1,3}\s*/, '').replace(/[#*`]/g, '').trim()
+                    return (
+                      <p key={i} style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', display: 'flex', gap: 9 }}>
+                        {bullet && <span style={{ color: 'var(--text-disabled)', flexShrink: 0 }}>·</span>}
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</span>
+                      </p>
+                    )
+                  })}
+              </div>
             ) : (
               <p style={{ fontSize: 13, color: 'var(--text-disabled)', fontStyle: 'italic' }}>No focus set for this week</p>
             )}
