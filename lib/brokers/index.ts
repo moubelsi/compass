@@ -1,5 +1,6 @@
 import type { BrokerId, BrokerProvider } from './types'
 import { ctraderProvider } from './ctrader/provider'
+import { mexcProvider } from './mexc/provider'
 
 /**
  * Broker registry. Adding a broker (MT5, DXtrade, TradeLocker, Tradovate,
@@ -8,6 +9,7 @@ import { ctraderProvider } from './ctrader/provider'
  */
 const providers: Record<BrokerId, BrokerProvider> = {
   ctrader: ctraderProvider,
+  mexc: mexcProvider,
 }
 
 export function getProvider(id: BrokerId): BrokerProvider {

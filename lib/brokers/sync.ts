@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getProvider } from './index'
+import type { BrokerId } from './types'
 import type { BrokerConnectionRow } from './ctrader/connection'
 
 /** Leave headroom for the upsert + response inside the 60s function budget. */
@@ -24,8 +25,9 @@ export async function runSync(supabase: SupabaseClient, userId: string, conn: Br
   const account = conn.account_info?.accounts?.find(a => a.id === conn.broker_account_id)
   const isLive = account ? !!account.isLive : true
 
-  const batch = await getProvider('ctrader').importTrades({
+  const batch = await getProvider(conn.broker as BrokerId).importTrades({
     accessToken: conn.access_token,
+    secret: conn.refresh_token,
     accountId: conn.broker_account_id,
     isLive,
     sinceMs: Number(conn.last_deal_timestamp) || 0,

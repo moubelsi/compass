@@ -30,6 +30,149 @@ function formatLastSync(iso: string | null): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function MexcRow() {
+  const [status, setStatus]         = useState<'loading' | 'not_connected' | 'connected'>('loading')
+  const [account, setAccount]       = useState<{ accountNumber: string; currency: string } | null>(null)
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
+  const [showForm, setShowForm]     = useState(false)
+  const [apiKey, setApiKey]         = useState('')
+  const [apiSecret, setApiSecret]   = useState('')
+  const [busy, setBusy]             = useState(false)
+  const [syncing, setSyncing]       = useState(false)
+  const [syncMsg, setSyncMsg]       = useState('')
+  const [error, setError]           = useState('')
+
+  useEffect(() => {
+    fetch('/api/mexc/connect')
+      .then(async res => {
+        if (res.status === 404) { setStatus('not_connected'); return }
+        const data = await res.json()
+        if (!res.ok) { setStatus('not_connected'); return }
+        setAccount(data.account)
+        setLastSyncedAt(data.last_synced_at ?? null)
+        setStatus('connected')
+      })
+      .catch(() => setStatus('not_connected'))
+  }, [])
+
+  const syncNow = useCallback(async () => {
+    setSyncing(true)
+    setError('')
+    setSyncMsg('Syncing…')
+    let imported = 0
+    try {
+      for (let i = 0; i < 60; i++) {
+        const res = await fetch('/api/mexc/sync', { method: 'POST' })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) { setError(data.message || data.error || 'Sync failed.'); setSyncMsg(''); return }
+        imported += data.imported ?? 0
+        if (data.done) break
+        setSyncMsg(`Syncing… ${imported} trades imported so far`)
+      }
+      setLastSyncedAt(new Date().toISOString())
+      setSyncMsg(imported > 0 ? `Sync complete — ${imported} new trade${imported === 1 ? '' : 's'} imported.` : 'Sync complete — no new trades.')
+    } catch {
+      setError('Sync failed. Please try again.')
+      setSyncMsg('')
+    } finally {
+      setSyncing(false)
+    }
+  }, [])
+
+  async function connect() {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetch('/api/mexc/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey, apiSecret }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || 'Could not connect.'); return }
+      setAccount(data.account)
+      setStatus('connected')
+      setShowForm(false)
+      setApiKey('')
+      setApiSecret('')
+      // First connection: pull in the account's history right away
+      syncNow()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    if (!confirm('Disconnect MEXC? Imported trades stay in your journal.')) return
+    const res = await fetch('/api/mexc/disconnect', { method: 'POST' })
+    if (res.ok) { setStatus('not_connected'); setAccount(null); setLastSyncedAt(null); setSyncMsg('') }
+    else setError('Could not disconnect. Please try again.')
+  }
+
+  const connected = status === 'connected'
+
+  return (
+    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '16px 18px', marginTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>MEXC</p>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: connected ? 'var(--profit)' : 'var(--text-muted)' }} />
+              {status === 'loading' ? 'Checking…' : connected ? 'Connected' : 'Not connected'}
+            </span>
+          </div>
+          {connected && account && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>
+              MEXC · {account.accountNumber} · {account.currency} — Last sync: {formatLastSync(lastSyncedAt)}
+            </p>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {status === 'not_connected' && !showForm && (
+            <button onClick={() => setShowForm(true)} className="btn-primary" style={{ fontSize: 13 }}>
+              <Link2 size={14} /> Connect
+            </button>
+          )}
+          {connected && (
+            <button onClick={syncNow} disabled={syncing} style={{ ...secondaryBtn, opacity: syncing ? 0.6 : 1 }}>
+              <RefreshCw size={13} style={syncing ? { animation: 'spin 1s linear infinite' } : undefined} />
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          )}
+          {connected && (
+            <button onClick={disconnect} disabled={syncing} style={{ ...secondaryBtn, color: 'var(--loss)' }}>
+              <Unlink size={13} /> Disconnect
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showForm && (
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+            Create a <strong style={{ color: 'var(--text-secondary)' }}>read-only</strong> API key in MEXC under Account → API Management (futures read permission is enough) and paste it here. Keys are stored server-side and never leave your account.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 420 }}>
+            <input className="input" placeholder="API key" value={apiKey} onChange={e => setApiKey(e.target.value)} style={{ fontSize: 13 }} autoComplete="off" />
+            <input className="input" placeholder="API secret" type="password" value={apiSecret} onChange={e => setApiSecret(e.target.value)} style={{ fontSize: 13 }} autoComplete="off" />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-primary" style={{ fontSize: 13 }} disabled={busy || !apiKey || !apiSecret} onClick={connect}>
+                {busy ? 'Verifying…' : 'Connect'}
+              </button>
+              <button style={{ ...secondaryBtn }} onClick={() => { setShowForm(false); setError('') }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && <p style={{ fontSize: 12, color: 'var(--loss)', marginTop: 12 }}>{error}</p>}
+      {syncMsg && <p style={{ fontSize: 12, color: syncing ? 'var(--text-muted)' : 'var(--profit)', marginTop: 12 }}>{syncMsg}</p>}
+    </div>
+  )
+}
+
 export function BrokerConnections() {
   const [status, setStatus]         = useState<Status>('loading')
   const [accounts, setAccounts]     = useState<BrokerAccountView[]>([])
@@ -251,6 +394,9 @@ export function BrokerConnections() {
           <p style={{ fontSize: 12, color: syncing ? 'var(--text-muted)' : 'var(--profit)', marginTop: 12 }}>{syncMsg}</p>
         )}
       </div>
+
+      {/* MEXC (futures) */}
+      <MexcRow />
     </div>
   )
 }

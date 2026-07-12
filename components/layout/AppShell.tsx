@@ -227,12 +227,14 @@ function useBrokerAutoSync() {
 
     ;(async () => {
       try {
-        // Resumable batches: keep requesting until the API reports done
-        for (let i = 0; i < 20; i++) {
-          const res = await fetch('/api/ctrader/sync', { method: 'POST' })
-          if (!res.ok) return
-          const data = await res.json()
-          if (data.done) return
+        // Resumable batches per broker: keep requesting until the API reports done
+        for (const endpoint of ['/api/ctrader/sync', '/api/mexc/sync']) {
+          for (let i = 0; i < 20; i++) {
+            const res = await fetch(endpoint, { method: 'POST' })
+            if (!res.ok) break
+            const data = await res.json()
+            if (data.done) break
+          }
         }
       } catch { /* silent by design — the manual Sync Now button surfaces errors */ }
     })()

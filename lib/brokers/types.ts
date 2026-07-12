@@ -4,7 +4,7 @@
  * routes and UI only ever talk to this interface.
  */
 
-export type BrokerId = 'ctrader'
+export type BrokerId = 'ctrader' | 'mexc'
 
 export interface BrokerTokens {
   accessToken: string
@@ -74,20 +74,26 @@ export interface ImportBatch {
 
 export interface BrokerProvider {
   id: BrokerId
-  /** URL of the broker's OAuth consent screen */
-  getAuthUrl(redirectUri: string, state: string): string
-  /** Exchange an authorization code for tokens */
-  exchangeCode(code: string, redirectUri: string): Promise<BrokerTokens>
-  /** Refresh an expired access token */
-  refreshToken(refreshToken: string): Promise<BrokerTokens>
-  /** All trading accounts the user granted access to */
-  listAccounts(accessToken: string): Promise<BrokerAccount[]>
+  /** 'oauth' brokers redirect to a consent screen; 'apikey' brokers take a key + secret */
+  authType: 'oauth' | 'apikey'
+  /** URL of the broker's OAuth consent screen (oauth brokers) */
+  getAuthUrl?(redirectUri: string, state: string): string
+  /** Exchange an authorization code for tokens (oauth brokers) */
+  exchangeCode?(code: string, redirectUri: string): Promise<BrokerTokens>
+  /** Refresh an expired access token (oauth brokers) */
+  refreshToken?(refreshToken: string): Promise<BrokerTokens>
+  /** Validate an API key + secret and return basic account info (apikey brokers) */
+  verifyCredentials?(apiKey: string, apiSecret: string): Promise<BrokerAccount>
+  /** All trading accounts the user granted access to (oauth brokers) */
+  listAccounts?(accessToken: string): Promise<BrokerAccount[]>
   /**
    * Import closed trades newer than sinceMs, stopping near deadlineMs
    * (epoch ms) so serverless invocations can resume via the cursor.
+   * For apikey brokers `secret` carries the API secret.
    */
   importTrades(args: {
     accessToken: string
+    secret?: string
     accountId: string
     isLive: boolean
     sinceMs: number

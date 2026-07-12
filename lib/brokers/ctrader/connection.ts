@@ -23,20 +23,22 @@ export class ReauthRequiredError extends Error {
 }
 
 /**
- * Loads the signed-in user's cTrader connection (RLS scopes the query) and
- * transparently refreshes the access token when it is about to expire.
- * Returns null when the user has never connected cTrader.
+ * Loads the signed-in user's broker connection (RLS scopes the query) and —
+ * for OAuth brokers — transparently refreshes the access token when it is
+ * about to expire. Returns null when the broker was never connected.
  */
-export async function getFreshConnection(supabase: SupabaseClient): Promise<BrokerConnectionRow | null> {
+export async function getFreshConnection(supabase: SupabaseClient, broker: string = 'ctrader'): Promise<BrokerConnectionRow | null> {
   const { data, error } = await supabase
     .from('broker_connections')
     .select('*')
-    .eq('broker', 'ctrader')
+    .eq('broker', broker)
     .maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) return null
 
   const conn = data as BrokerConnectionRow
+  // API-key brokers (far-future expiry) never need a refresh
+  if (broker !== 'ctrader') return conn
   if (new Date(conn.expires_at).getTime() > Date.now()) return conn
 
   let tokens

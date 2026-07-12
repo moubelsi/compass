@@ -54,6 +54,7 @@ async function listAccounts(accessToken: string): Promise<BrokerAccount[]> {
 
 export const ctraderProvider: BrokerProvider = {
   id: 'ctrader',
+  authType: 'oauth',
   getAuthUrl,
   exchangeCode,
   refreshToken: refreshAccessToken,

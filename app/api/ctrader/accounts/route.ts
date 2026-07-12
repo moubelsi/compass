@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ accounts: cached.accounts, selected: conn.broker_account_id, last_synced_at: conn.last_synced_at })
     }
 
-    const accounts = await getProvider('ctrader').listAccounts(conn.access_token)
+    const accounts = await getProvider('ctrader').listAccounts!(conn.access_token)
     await supabase
       .from('broker_connections')
       .update({ account_info: { accounts, fetched_at: new Date().toISOString() }, updated_at: new Date().toISOString() })
