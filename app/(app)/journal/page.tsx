@@ -689,36 +689,6 @@ function JournalPageInner() {
             </div>
           </div>
 
-          {/* ── AI Reflection ── */}
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, var(--ai-dim) 0%, transparent 65%)', pointerEvents: 'none' }} />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--ai-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Sparkles size={13} style={{ color: 'var(--ai-accent)' }} />
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>AI Reflection</span>
-                <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)', letterSpacing: '0.04em' }}>COMING SOON</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, opacity: 0.45 }}>
-                {([
-                  { label: 'Strengths',       text: 'Discipline in following your plan. Clean entries on the first two setups.' },
-                  { label: 'Watch out',        text: 'Signs of revenge trading after consecutive losses in the afternoon.' },
-                  { label: 'Pattern',          text: 'Morning session win rate is consistently higher. Consider limiting afternoon trades.' },
-                  { label: "Tomorrow's focus", text: 'Stick to the pre-session plan. One setup, one trigger, full conviction.' },
-                ] as const).map(item => (
-                  <div key={item.label} style={{ padding: '11px 13px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{item.label}</p>
-                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{item.text}</p>
-                  </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 12, fontStyle: 'italic' }}>
-                AI analysis will be generated from your actual trading data once this feature launches.
-              </p>
-            </div>
-          </div>
-
           {/* ── Empty state ── */}
           {pastWithContent.length === 0 && !hasAnyContent && dayTrades.length === 0 && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
@@ -742,6 +712,36 @@ function JournalPageInner() {
             entryDates={entryDates}
             tradeDates={tradeDates}
           />
+
+          {/* ── AI Reflection (coming soon — parked below the calendar) ── */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '16px 18px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, var(--ai-dim) 0%, transparent 65%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--ai-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Sparkles size={12} style={{ color: 'var(--ai-accent)' }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>AI Reflection</span>
+                <span style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 3, background: 'var(--ai-dim)', color: 'var(--ai-accent)', letterSpacing: '0.04em' }}>COMING SOON</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, opacity: 0.45 }}>
+                {([
+                  { label: 'Strengths',       text: 'Discipline in following your plan. Clean entries on the first two setups.' },
+                  { label: 'Watch out',        text: 'Signs of revenge trading after consecutive losses in the afternoon.' },
+                  { label: 'Pattern',          text: 'Morning session win rate is consistently higher. Consider limiting afternoon trades.' },
+                  { label: "Tomorrow's focus", text: 'Stick to the pre-session plan. One setup, one trigger, full conviction.' },
+                ] as const).map(item => (
+                  <div key={item.label} style={{ padding: '10px 12px', borderRadius: 7, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <p style={{ fontSize: 9, fontWeight: 600, color: 'var(--ai-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>{item.label}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{item.text}</p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: 'var(--text-disabled)', marginTop: 10, fontStyle: 'italic' }}>
+                Generated from your actual trading data once this launches.
+              </p>
+            </div>
+          </div>
 
           {/* Daily summary */}
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '16px 18px' }}>
