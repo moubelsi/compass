@@ -357,6 +357,13 @@ function JournalPageInner() {
 
   useEffect(() => { setTradesOpen(false) }, [selectedDate])
 
+  const [dayWater, setDayWater] = useState<number | null>(null)
+
+  useEffect(() => {
+    supabase.from('hydration_days').select('ml').eq('day', selectedDate).maybeSingle()
+      .then(({ data }) => setDayWater(data?.ml ?? null))
+  }, [selectedDate])
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null))
     supabase.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(90)
@@ -774,6 +781,13 @@ function JournalPageInner() {
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Win rate</span>
                 <span style={{ fontSize: 13, fontWeight: 500, color: dayTrades.length > 0 ? (winRate >= 50 ? 'var(--profit)' : 'var(--loss)') : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
                   {dayTrades.length > 0 ? `${winRate}%` : '—'}
+                </span>
+              </div>
+              {/* Hydration */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Hydration</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: dayWater != null && dayWater >= 2500 ? 'var(--profit)' : dayWater ? 'var(--text-primary)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {dayWater ? `${(dayWater / 1000).toFixed(1)}L / 2.5L` : '—'}
                 </span>
               </div>
               {/* Best trade */}

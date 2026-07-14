@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronRight, ChevronLeft, Plus, X, Sparkles } from 'lucide-react'
 import { EquityCurve } from '@/components/charts/EquityCurve'
+import { HydrationCard } from '@/components/dashboard/HydrationCard'
 import { supabase } from '@/lib/supabase'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
@@ -749,6 +750,9 @@ export default function DashboardPage() {
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>P&L calendar</p>
             <div className="card" style={{ padding: '18px 20px' }}>
               <PnLCalendar trades={trades} onDayClick={date => { setSelectedDay(date); setDayEntry(null) }} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <HydrationCard />
             </div>
           </div>
 
