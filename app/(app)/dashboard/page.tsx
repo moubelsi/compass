@@ -661,8 +661,10 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Weekly focus — mirrors this week's Notebook document */}
+          {/* Hydration + Weekly focus — mirrors this week's Notebook document */}
           <div className="alltime-block" style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: 36, paddingRight: 36 }}>
+            <HydrationCard bare />
+            <div style={{ height: 1, background: 'var(--border-subtle)', margin: '20px 0' }} />
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
               <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Weekly focus</p>
               <Link href={`/notebook?folder=weekly-focus&note=${currentFocusSlug()}`} style={{ fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none' }}>
@@ -750,9 +752,6 @@ export default function DashboardPage() {
             <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>P&L calendar</p>
             <div className="card" style={{ padding: '18px 20px' }}>
               <PnLCalendar trades={trades} onDayClick={date => { setSelectedDay(date); setDayEntry(null) }} />
-            </div>
-            <div style={{ marginTop: 16 }}>
-              <HydrationCard />
             </div>
           </div>
 

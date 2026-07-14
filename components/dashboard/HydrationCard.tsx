@@ -12,40 +12,58 @@ const litres = (ml: number) => (ml / 1000).toFixed(1)
 
 /**
  * Daily water tracker. Tap adds 250ml; long-press (or right-click) opens
- * +100/+250/+500. Persists one row per day (debounced upsert), so the
- * count is shared across devices and shows up in the Journal day summary.
+ * +100/+250/+500. Persists one row per day (debounced upsert with a flush
+ * on unmount), so the count is shared across devices and shows up in the
+ * Journal day summary. `bare` renders without the card chrome for use
+ * inside typographic sections.
  */
-export function HydrationCard() {
+export function HydrationCard({ bare = false }: { bare?: boolean }) {
   const [ml, setMl]           = useState(0)
   const [loaded, setLoaded]   = useState(false)
   const [picker, setPicker]   = useState(false)
   const [justDone, setJustDone] = useState(false)
+  const [saveError, setSaveError] = useState('')
 
   const pressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressed = useRef(false)
+  const mlRef       = useRef(0)
+  const dirtyRef    = useRef(false)
   const today = localDateStr()
 
   useEffect(() => {
     supabase.from('hydration_days').select('ml').eq('day', today).maybeSingle()
-      .then(({ data }) => { setMl(data?.ml ?? 0); setLoaded(true) })
+      .then(({ data, error }) => {
+        if (error) setSaveError(error.message)
+        setMl(data?.ml ?? 0)
+        mlRef.current = data?.ml ?? 0
+        setLoaded(true)
+      })
     return () => {
       if (pressTimer.current) clearTimeout(pressTimer.current)
       if (saveTimer.current) clearTimeout(saveTimer.current)
+      // Don't lose a tap that happened just before navigating away
+      if (dirtyRef.current) void persistNow(mlRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  async function persistNow(value: number) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('hydration_days').upsert(
+      { user_id: user.id, day: today, ml: value, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,day' },
+    )
+    if (error) setSaveError(error.message)
+    else { dirtyRef.current = false; setSaveError('') }
+  }
+
   function schedulePersist(next: number) {
+    mlRef.current = next
+    dirtyRef.current = true
     if (saveTimer.current) clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      await supabase.from('hydration_days').upsert(
-        { user_id: user.id, day: today, ml: next, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id,day' },
-      )
-    }, 500)
+    saveTimer.current = setTimeout(() => void persistNow(next), 500)
   }
 
   function setAmount(next: number) {
@@ -82,7 +100,7 @@ export function HydrationCard() {
   const done = ml >= GOAL_ML
 
   return (
-    <div className="card" style={{ padding: '18px 20px' }}>
+    <div className={bare ? undefined : 'card'} style={bare ? undefined : { padding: '18px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Hydration</p>
         <span style={{ fontSize: 11, color: 'var(--text-disabled)', fontVariantNumeric: 'tabular-nums' }}>{Math.round(pct)}%</span>
@@ -141,6 +159,12 @@ export function HydrationCard() {
           </button>
         )}
       </div>
+
+      {saveError && (
+        <p style={{ fontSize: 11, color: 'var(--loss)', marginTop: 8 }}>
+          Not saved: {saveError.includes('hydration_days') || saveError.includes('schema') ? 'run the hydration migration in Supabase' : saveError}
+        </p>
+      )}
     </div>
   )
 }
