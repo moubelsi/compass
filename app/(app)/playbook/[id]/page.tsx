@@ -6,10 +6,15 @@ import { ArrowLeft, Edit3, Trash2, CheckSquare, Square } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
+import { useSetupStats, statsFor } from '@/lib/useSetupStats'
 
 export default function SetupDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { symbol } = useCurrency()
+  const { statsByName } = useSetupStats()
   const [setup, setSetup] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [checked, setChecked] = useState<Record<number, boolean>>({})
@@ -61,6 +66,26 @@ export default function SetupDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           )}
         </div>
+
+        {/* Performance — trades logged with this strategy */}
+        {(() => {
+          const s = statsFor(statsByName, setup.name)
+          if (s.count === 0) return null
+          return (
+            <div className="card" style={{ padding: '18px 22px', marginBottom: 20, display: 'flex', gap: 0 }}>
+              {[
+                { label: 'Trades', value: String(s.count) },
+                { label: 'Win rate', value: `${s.winRate.toFixed(0)}%`, color: s.winRate >= 50 ? 'var(--profit)' : 'var(--loss)' },
+                { label: 'Total P&L', value: formatCurrency(s.pnl, true, symbol), color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)' },
+              ].map((stat, i, arr) => (
+                <div key={stat.label} style={{ flex: 1, paddingRight: i < arr.length - 1 ? 16 : 0, borderRight: i < arr.length - 1 ? '1px solid var(--border-subtle)' : 'none', marginRight: i < arr.length - 1 ? 16 : 0 }}>
+                  <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>{stat.label}</p>
+                  <p style={{ fontSize: 18, fontWeight: 600, color: stat.color ?? 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{stat.value}</p>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {setup.description && (
           <div className="card" style={{ padding: 22, marginBottom: 20 }}>

@@ -9,8 +9,7 @@ import { use } from 'react'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, hasContent } from '@/lib/utils'
 import { TagInput } from '@/components/ui/TagInput'
-
-const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
+import { useStrategyOptions } from '@/lib/useStrategyOptions'
 
 const ASSET_TYPES = [
   { label: 'Forex', multiplier: 100000 },
@@ -60,6 +59,7 @@ function ConfidenceSlider({ value, onChange }: { value: number; onChange: (v: nu
 export default function EditTradePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const { symbol } = useCurrency()
+  const STRATEGIES = useStrategyOptions()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

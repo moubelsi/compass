@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Plus, BookMarked, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useCurrency } from '@/lib/useCurrency'
+import { formatCurrency } from '@/lib/utils'
+import { useSetupStats, statsFor } from '@/lib/useSetupStats'
 
 interface Setup {
   id: string
@@ -15,9 +18,11 @@ interface Setup {
 }
 
 export default function PlaybookPage() {
+  const { symbol } = useCurrency()
   const [setups, setSetups] = useState<Setup[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const { statsByName } = useSetupStats()
 
   useEffect(() => {
     supabase.from('setups').select('*').order('created_at', { ascending: false })
@@ -84,6 +89,19 @@ export default function PlaybookPage() {
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = '' }}
                 >
                   <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>{setup.name}</h3>
+                  {(() => {
+                    const s = statsFor(statsByName, setup.name)
+                    if (s.count === 0) return null
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.count} trade{s.count !== 1 ? 's' : ''}</span>
+                        <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-strong)' }} />
+                        <span style={{ fontSize: 12, fontWeight: 500, color: s.winRate >= 50 ? 'var(--profit)' : 'var(--loss)' }}>{s.winRate.toFixed(0)}% win</span>
+                        <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--border-strong)' }} />
+                        <span style={{ fontSize: 12, fontWeight: 500, color: s.pnl >= 0 ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(s.pnl, true, symbol)}</span>
+                      </div>
+                    )
+                  })()}
                   {setup.description && (
                     <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 12, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any }}>
                       {setup.description}

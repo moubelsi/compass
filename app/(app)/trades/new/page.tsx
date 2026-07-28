@@ -8,8 +8,7 @@ import { supabase } from '@/lib/supabase'
 import { TagInput } from '@/components/ui/TagInput'
 import { useCurrency } from '@/lib/useCurrency'
 import { formatCurrency, localDateStr } from '@/lib/utils'
-
-const STRATEGIES = ['London Breakout','Trend Continuation','Reversal','Range Break','Support Bounce','Asian Session Break','News Fade','MTF Hidden OB','Other']
+import { useStrategyOptions } from '@/lib/useStrategyOptions'
 
 const ASSET_TYPES = [
   { label: 'Forex', multiplier: 100000 },
@@ -53,6 +52,7 @@ function Stars({ value, onChange }: { value: number; onChange: (v: number) => vo
 
 export default function NewTradePage() {
   const { symbol } = useCurrency()
+  const STRATEGIES = useStrategyOptions()
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
