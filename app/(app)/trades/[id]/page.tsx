@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Edit3, Trash2, ImageIcon, FileText, BarChart2, Star, Activity } from 'lucide-react'
+import { ArrowLeft, Edit3, Trash2, ImageIcon, FileText, BarChart2, Star, Activity, ImagePlus, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { use } from 'react'
@@ -59,6 +59,8 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [uploadingShot, setUploadingShot] = useState(false)
+  const screenshotRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -92,6 +94,21 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
       return
     }
     router.push('/trades')
+  }
+
+  async function uploadScreenshot(file: File) {
+    if (file.size > 10 * 1024 * 1024) { setSaveError('Screenshot must be under 10 MB.'); return }
+    setSaveError('')
+    setUploadingShot(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaveError('Session expired. Please sign in again.'); setUploadingShot(false); return }
+    const ext = file.name.split('.').pop() ?? 'png'
+    const path = `${user.id}/${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from('screenshots').upload(path, file)
+    if (uploadError) { setSaveError(`Upload failed: ${uploadError.message}`); setUploadingShot(false); return }
+    const url = supabase.storage.from('screenshots').getPublicUrl(path).data.publicUrl
+    await updateField('screenshot_url', url)
+    setUploadingShot(false)
   }
 
   async function toggleFavourite() {
@@ -320,15 +337,40 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
               </div>
             )}
 
-            {hasContent(trade.screenshot_url) && (
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div className="card" style={{ padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ImageIcon size={15} style={{ color: 'var(--text-muted)' }} />
                   <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Chart</p>
                 </div>
-                <img src={trade.screenshot_url} alt="Trade screenshot" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-subtle)' }} />
+                {hasContent(trade.screenshot_url) && (
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button type="button" onClick={() => screenshotRef.current?.click()} disabled={uploadingShot}
+                      style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      {uploadingShot ? 'Uploading…' : 'Replace'}
+                    </button>
+                    <button type="button" onClick={() => updateField('screenshot_url', null)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, color: 'var(--loss)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                      <X size={12} />Remove
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+
+              {hasContent(trade.screenshot_url) ? (
+                <img src={trade.screenshot_url} alt="Trade screenshot" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border-subtle)' }} />
+              ) : (
+                <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '28px 16px', borderRadius: 8, border: '2px dashed var(--border-default)', cursor: uploadingShot ? 'default' : 'pointer', color: 'var(--text-muted)' }}>
+                  <ImagePlus size={20} strokeWidth={1.5} />
+                  <span style={{ fontSize: 13 }}>{uploadingShot ? 'Uploading…' : 'Click to add a chart screenshot'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>PNG or JPG up to 10MB</span>
+                  <input type="file" accept="image/*" disabled={uploadingShot} style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadScreenshot(f); e.target.value = '' }} />
+                </label>
+              )}
+              <input ref={screenshotRef} type="file" accept="image/*" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadScreenshot(f); e.target.value = '' }} />
+            </div>
           </div>
         </div>
         <div style={{ height: 40 }} />
