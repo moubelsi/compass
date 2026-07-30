@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ChevronRight, ChevronLeft, Plus, X, Sparkles } from 'lucide-react'
+import { ChevronRight, ChevronLeft, ChevronDown, Plus, X, Sparkles } from 'lucide-react'
+import { TradeQuickFields } from '@/components/trades/TradeQuickFields'
 import { EquityCurve } from '@/components/charts/EquityCurve'
 import { HydrationCard } from '@/components/dashboard/HydrationCard'
 import { supabase } from '@/lib/supabase'
@@ -492,6 +493,11 @@ export default function DashboardPage() {
   const [selectedDay, setSelectedDay]     = useState<string | null>(null)
   const [dayEntry, setDayEntry]           = useState<any>(null)
   const [weeklyFocus, setWeeklyFocus]     = useState<string | null>(null)
+  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null)
+
+  function updateTradeLocal(id: string, patch: Record<string, any>) {
+    setTrades(prev => prev.map((t: any) => t.id === id ? { ...t, ...patch } : t))
+  }
 
   useEffect(() => {
     if (!selectedDay) return
@@ -512,7 +518,7 @@ export default function DashboardPage() {
     if (ll) setDailyLossLimit(parseFloat(ll))
 
     fetchAllRows((from, to) => supabase.from('trades')
-      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date')
+      .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, followed_plan, trade_type, confidence, screenshot_url')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, to))
@@ -770,29 +776,43 @@ export default function DashboardPage() {
                 </div>
               ) : recentTrades.map((t, i) => {
                 const up = Number(t.pnl) >= 0
+                const expanded = expandedTradeId === t.id
                 return (
-                  <Link key={t.id} href={`/trades/${t.id}`}
-                    style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'center', gap: 16, padding: '13px 18px', borderBottom: i < recentTrades.length - 1 ? '1px solid var(--border-subtle)' : 'none', textDecoration: 'none', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{up ? 'WIN' : 'LOSS'}</span>
-                      </div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.strategy || '—'}</span>
+                  <div key={t.id} style={{ borderBottom: i < recentTrades.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'stretch' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-elevated)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                      <Link href={`/trades/${t.id}`}
+                        style={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'center', gap: 16, padding: '13px 18px', textDecoration: 'none' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{t.symbol?.toUpperCase()}</span>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: t.direction === 'LONG' ? 'var(--profit-dim)' : 'var(--loss-dim)', color: t.direction === 'LONG' ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{t.direction}</span>
+                            <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: up ? 'var(--profit-dim)' : 'var(--loss-dim)', color: up ? 'var(--profit)' : 'var(--loss)', letterSpacing: '0.04em' }}>{up ? 'WIN' : 'LOSS'}</span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.strategy || '—'}</span>
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          {new Date(t.trade_date || t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                          {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right', minWidth: 72 }}>
+                          {formatCurrency(Number(t.pnl), true, symbol)}
+                        </span>
+                      </Link>
+                      <button type="button" onClick={() => setExpandedTradeId(expanded ? null : t.id)} title="Quick edit"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, flexShrink: 0, background: 'none', border: 'none', borderLeft: '1px solid var(--border-subtle)', cursor: 'pointer', color: expanded ? 'var(--accent)' : 'var(--text-muted)' }}>
+                        <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      </button>
                     </div>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      {new Date(t.trade_date || t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      {t.return_pct != null ? `${Number(t.return_pct) >= 0 ? '+' : ''}${Number(t.return_pct).toFixed(2)}%` : '—'}
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: up ? 'var(--profit)' : 'var(--loss)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'right', minWidth: 72 }}>
-                      {formatCurrency(Number(t.pnl), true, symbol)}
-                    </span>
-                  </Link>
+                    {expanded && (
+                      <div style={{ padding: '14px 18px 16px', background: 'var(--bg-elevated)', borderTop: '1px solid var(--border-subtle)' }}>
+                        <TradeQuickFields trade={t} onUpdated={patch => updateTradeLocal(t.id, patch)} />
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
