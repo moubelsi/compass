@@ -200,22 +200,22 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
 
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
-      <div className="page-fixed-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px' }}>
-        <Link href={`/trades/${id}`} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>
+      <div className="page-fixed-bar m-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 40px' }}>
+        <Link href={`/trades/${id}`} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none', flexShrink: 0 }}>
           <ArrowLeft size={15} />Cancel
         </Link>
-        <span style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Edit trade</span>
+        <span className="m-hide" style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)' }}>Edit trade</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button type="button" onClick={() => setF(p => ({ ...p, is_favourite: !p.is_favourite }))} title={f.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: f.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${f.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer' }}>
+          <button type="button" onClick={() => setF(p => ({ ...p, is_favourite: !p.is_favourite }))} title={f.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: f.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${f.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer', flexShrink: 0 }}>
             <Star size={15} fill={f.is_favourite ? '#B45309' : 'none'} style={{ color: f.is_favourite ? '#B45309' : 'var(--text-muted)' }} />
           </button>
-          <button type="button" onClick={handleSave} disabled={saving} className="btn-primary" style={{ fontSize: 14 }}>
+          <button type="button" onClick={handleSave} disabled={saving} className="btn-primary" style={{ fontSize: 14, flexShrink: 0 }}>
             <Check size={14} strokeWidth={2.5} />{saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       </div>
 
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
+      <div className="m-pad" style={{ maxWidth: 960, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
         {error && (
           <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{error}</div>
         )}
@@ -245,7 +245,7 @@ export default function EditTradePage({ params }: { params: Promise<{ id: string
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           {/* Left */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>

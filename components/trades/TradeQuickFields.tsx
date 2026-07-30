@@ -60,8 +60,8 @@ export function TradeQuickFields({ trade, onUpdated }: { trade: QuickEditTrade; 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }} onClick={e => e.stopPropagation()}>
-      <div style={row}>
-        <span style={label}>Strategy</span>
+      <div className="field-row" style={row}>
+        <span className="field-row-label" style={label}>Strategy</span>
         <select className="input" value={trade.strategy || ''} onChange={e => updateField('strategy', e.target.value || null)}
           style={{ fontSize: 12, padding: '4px 8px', width: 'auto', maxWidth: 200 }}>
           <option value="">Not set</option>
@@ -69,8 +69,8 @@ export function TradeQuickFields({ trade, onUpdated }: { trade: QuickEditTrade; 
         </select>
       </div>
 
-      <div style={row}>
-        <span style={label}>Followed plan</span>
+      <div className="field-row" style={row}>
+        <span className="field-row-label" style={label}>Followed plan</span>
         <div style={{ display: 'flex', gap: 5 }}>
           {[true, false].map(v => (
             <button key={String(v)} type="button" onClick={() => updateField('followed_plan', v)}
@@ -81,8 +81,8 @@ export function TradeQuickFields({ trade, onUpdated }: { trade: QuickEditTrade; 
         </div>
       </div>
 
-      <div style={row}>
-        <span style={label}>Trade type</span>
+      <div className="field-row" style={row}>
+        <span className="field-row-label" style={label}>Trade type</span>
         <div style={{ display: 'flex', gap: 5 }}>
           {(['planned', 'impulsive'] as const).map(t => (
             <button key={t} type="button" onClick={() => updateField('trade_type', trade.trade_type === t ? null : t)}
@@ -93,8 +93,8 @@ export function TradeQuickFields({ trade, onUpdated }: { trade: QuickEditTrade; 
         </div>
       </div>
 
-      <div style={row}>
-        <span style={label}>Confidence</span>
+      <div className="field-row" style={row}>
+        <span className="field-row-label" style={label}>Confidence</span>
         <div style={{ display: 'flex', gap: 3 }}>
           {[1,2,3,4,5,6,7,8,9,10].map(n => {
             const active = trade.confidence != null && Number(trade.confidence) >= n
@@ -111,8 +111,8 @@ export function TradeQuickFields({ trade, onUpdated }: { trade: QuickEditTrade; 
         </div>
       </div>
 
-      <div style={row}>
-        <span style={label}>Screenshot</span>
+      <div className="field-row" style={row}>
+        <span className="field-row-label" style={label}>Screenshot</span>
         {hasContent(trade.screenshot_url) ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <img src={trade.screenshot_url!} alt="" style={{ width: 40, height: 26, borderRadius: 4, objectFit: 'cover', border: '1px solid var(--border-subtle)' }} />

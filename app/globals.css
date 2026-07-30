@@ -276,6 +276,15 @@ body {
   /* Notebook: panes become full-width steps of a drill-down */
   .nb-pane, .nb-right { width: 100% !important; border-right: none !important; }
 
+  /* Trade detail / quick-edit fields: label stacks above its control instead
+     of squeezing pills/dropdowns into whatever width is left beside it */
+  .field-row { flex-direction: column !important; align-items: flex-start !important; gap: 6px !important; }
+  .field-row-label { width: auto !important; }
+
+  /* Dashboard Recent trades: date column drops so the expand chevron never
+     gets pushed off-screen */
+  .recent-trade-date { display: none !important; }
+
   /* Journal responsive */
   .journal-header-pad { padding-left: 20px !important; padding-right: 20px !important; }
   .journal-body       { padding-left: 16px !important; padding-right: 16px !important; }

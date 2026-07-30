@@ -22,8 +22,8 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
 /** Label + inline-editable value on the same row — click the value to change it, saves immediately. */
 function EditRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-subtle)', gap: 12 }}>
-      <span style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>{label}</span>
+    <div className="field-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border-subtle)', gap: 12 }}>
+      <span className="field-row-label" style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>{label}</span>
       {children}
     </div>
   )
@@ -138,7 +138,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
   return (
     <div style={{ background: 'var(--bg-base)', minHeight: '100vh' }}>
       {/* Fixed nav bar */}
-      <div className="page-fixed-bar" style={{
+      <div className="page-fixed-bar m-pad" style={{
         position: 'fixed',
         top: 0,
         right: 0,
@@ -150,24 +150,24 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
         background: 'var(--bg-surface)',
         borderBottom: '1px solid var(--border-subtle)',
       }}>
-        <Link href="/trades" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>
-          <ArrowLeft size={15} />Trades
+        <Link href="/trades" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none', flexShrink: 0 }}>
+          <ArrowLeft size={15} /><span className="m-hide">Trades</span>
         </Link>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={toggleFavourite} title={trade.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: trade.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${trade.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer' }}>
+          <button onClick={toggleFavourite} title={trade.is_favourite ? 'Remove from favourites' : 'Add to favourites'} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 8, background: trade.is_favourite ? 'rgba(180,83,9,0.08)' : 'var(--bg-elevated)', border: `1px solid ${trade.is_favourite ? 'rgba(180,83,9,0.25)' : 'var(--border-subtle)'}`, cursor: 'pointer', flexShrink: 0 }}>
             <Star size={15} fill={trade.is_favourite ? '#B45309' : 'none'} style={{ color: trade.is_favourite ? '#B45309' : 'var(--text-muted)' }} />
           </button>
-          <Link href={`/trades/${id}/edit`} className="btn-secondary" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
-            <Edit3 size={14} />Edit trade
+          <Link href={`/trades/${id}/edit`} className="btn-secondary" title="Edit trade" style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none', flexShrink: 0 }}>
+            <Edit3 size={14} /><span className="m-hide">Edit trade</span>
           </Link>
-          <button className="btn-ghost" style={{ fontSize: 14, color: 'var(--loss)', display: 'flex', alignItems: 'center', gap: 6 }} onClick={handleDelete} disabled={deleting}>
-            <Trash2 size={14} />{deleting ? 'Deleting…' : 'Delete'}
+          <button className="btn-ghost" title={deleting ? 'Deleting…' : 'Delete'} style={{ fontSize: 14, color: 'var(--loss)', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }} onClick={handleDelete} disabled={deleting}>
+            <Trash2 size={14} /><span className="m-hide">{deleting ? 'Deleting…' : 'Delete'}</span>
           </button>
         </div>
       </div>
 
       {/* Content — padded to clear the fixed nav */}
-      <div style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
+      <div className="m-pad" style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 40px', paddingTop: 80 }}>
         {deleteError && (
           <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{deleteError}</div>
         )}
@@ -175,7 +175,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
           <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{saveError}</div>
         )}
         {/* Hero */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
           {/* Left */}
           <div className="card" style={{ padding: 28 }}>
             <div style={{ marginBottom: 24 }}>
@@ -236,7 +236,7 @@ export default function TradeDetailPage({ params }: { params: Promise<{ id: stri
         </div>
 
         {/* Bottom grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="m-grid-1" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           {/* Left: Setup details + Behaviour — quick-fill, saves on change */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div className="card" style={{ padding: 24 }}>
