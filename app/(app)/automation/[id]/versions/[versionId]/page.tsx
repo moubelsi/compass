@@ -53,6 +53,8 @@ interface TradeRow {
   direction: 'LONG' | 'SHORT'
   pnl: number
   rr: number | null
+  mode: 'paper' | 'live' | 'backtest' | null
+  is_live_account: boolean | null
 }
 
 interface OpenPositionRow {
@@ -65,6 +67,8 @@ interface OpenPositionRow {
   sl: number | null
   tp: number | null
   created_at: string
+  mode: 'paper' | 'live' | 'backtest' | null
+  is_live_account: boolean | null
 }
 
 function statusBadge(status: string) {
@@ -72,6 +76,17 @@ function statusBadge(status: string) {
   if (status === 'paused') return <span className="badge-loss">Paused</span>
   if (status === 'archived') return <span className="badge-neutral">Archived</span>
   return <span className="badge-neutral">Draft</span>
+}
+
+/** Distinguishes stakes at a glance: Paper (simulated), Demo (a real broker
+ * call, but against a demo account — no real money), or Live (real money).
+ * Neutral/grey for the two no-real-money cases, red only for genuine stakes —
+ * keeps this from visually clashing with the adjacent green/red side badge. */
+function stakesBadge(mode: string | null, isLiveAccount: boolean | null) {
+  if (mode === 'paper') return <span className="badge-neutral">Paper</span>
+  if (mode === 'live' && isLiveAccount) return <span className="badge-loss">Live</span>
+  if (mode === 'live') return <span className="badge-neutral">Demo</span>
+  return null
 }
 
 function eventBadge(status: string) {
@@ -147,7 +162,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
 
     const [{ data: entries }, { data: closes }] = await Promise.all([
       supabase.from('automation_orders')
-        .select('id, symbol, side, filled_price, requested_price, requested_qty, sl, tp, created_at')
+        .select('id, symbol, side, filled_price, requested_price, requested_qty, sl, tp, created_at, mode, is_live_account')
         .eq('strategy_version_id', versionId).in('side', ['long', 'short']).eq('status', 'filled')
         .order('created_at', { ascending: false }),
       supabase.from('automation_orders')
@@ -467,6 +482,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                     return (
                       <div key={p.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          {stakesBadge(p.mode, p.is_live_account)}
                           <span className={p.side === 'long' ? 'badge-profit' : 'badge-loss'}>{p.side.toUpperCase()}</span>
                           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.symbol}</span>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
@@ -493,6 +509,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                 {trades.map(t => (
                   <div key={t.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      {stakesBadge(t.mode, t.is_live_account)}
                       <span className={t.direction === 'LONG' ? 'badge-profit' : 'badge-loss'}>{t.direction}</span>
                       <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
                       <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{t.trade_date}</span>

@@ -16,8 +16,8 @@ import { localDateStr } from '@/lib/utils'
 async function resolveAdapter(
   supabase: SupabaseClient,
   version: { mode: string; broker_account_id: string | null },
-): Promise<{ adapter: ExecutionAdapter } | { error: string }> {
-  if (version.mode === 'paper') return { adapter: getExecutionAdapter('paper') }
+): Promise<{ adapter: ExecutionAdapter; isLiveAccount: boolean | null } | { error: string }> {
+  if (version.mode === 'paper') return { adapter: getExecutionAdapter('paper'), isLiveAccount: null }
   if (version.mode !== 'live') return { error: `mode "${version.mode}" has no execution adapter` }
   if (!version.broker_account_id) return { error: 'live mode has no broker account connected' }
 
@@ -31,12 +31,12 @@ async function resolveAdapter(
   if (account.broker === 'ctrader') {
     const creds = await getFreshCTraderCredentials(supabase, account.id)
     if (!creds) return { error: 'could not load cTrader credentials' }
-    return { adapter: createCTraderAdapter(creds, account.is_live) }
+    return { adapter: createCTraderAdapter(creds, account.is_live), isLiveAccount: account.is_live }
   }
   if (account.broker === 'okx') {
     const creds = await getOkxCredentials(supabase, account.id)
     if (!creds) return { error: 'could not load OKX credentials' }
-    return { adapter: createOkxAdapter(creds, account.is_live) }
+    return { adapter: createOkxAdapter(creds, account.is_live), isLiveAccount: account.is_live }
   }
   return { error: `unknown broker "${account.broker}"` }
 }
@@ -166,12 +166,12 @@ export async function processWebhookEvent(
     return { httpStatus: 200, body: { ok: true, status: 'rejected', reason } }
   }
 
-  const { adapter } = resolved
+  const { adapter, isLiveAccount } = resolved
 
   if (signal.side === 'close') {
-    return closePosition(supabase, webhook, event.id, version, signal, adapter)
+    return closePosition(supabase, webhook, event.id, version, signal, adapter, isLiveAccount)
   }
-  return openPosition(supabase, webhook, event.id, version, signal, risk.computedQty!, adapter)
+  return openPosition(supabase, webhook, event.id, version, signal, risk.computedQty!, adapter, isLiveAccount)
 }
 
 async function openPosition(
@@ -182,6 +182,7 @@ async function openPosition(
   signal: { symbol: string; side: 'long' | 'short' | 'close'; price: number; sl: number | null; tp: number | null },
   qty: number,
   adapter: ExecutionAdapter,
+  isLiveAccount: boolean | null,
 ): Promise<PipelineResult> {
   const result = await adapter.placeOrder({
     symbol: signal.symbol,
@@ -199,6 +200,7 @@ async function openPosition(
       strategy_version_id: version.id,
       webhook_event_id: eventId,
       mode: version.mode,
+      is_live_account: isLiveAccount,
       symbol: signal.symbol,
       side: signal.side,
       order_type: 'market',
@@ -230,6 +232,7 @@ async function closePosition(
   version: Record<string, unknown>,
   signal: { symbol: string; price: number },
   adapter: ExecutionAdapter,
+  isLiveAccount: boolean | null,
 ): Promise<PipelineResult> {
   const openOrder = await findOpenEntryOrder(supabase, version.id as string, signal.symbol)
   if (!openOrder) {
@@ -255,6 +258,7 @@ async function closePosition(
       webhook_event_id: eventId,
       closes_order_id: openOrder.id,
       mode: version.mode,
+      is_live_account: isLiveAccount,
       symbol: signal.symbol,
       side: 'close',
       order_type: 'market',
@@ -270,7 +274,7 @@ async function closePosition(
     .single()
 
   if (result.status === 'filled' && closeOrder) {
-    await publishTrade(supabase, webhook.user_id, version, openOrder, closeOrder.id, result.filledPrice ?? signal.price)
+    await publishTrade(supabase, webhook.user_id, version, openOrder, closeOrder.id, result.filledPrice ?? signal.price, isLiveAccount)
   }
 
   await supabase
@@ -291,6 +295,7 @@ async function publishTrade(
   openOrder: Record<string, unknown>,
   closeOrderId: string,
   exitPrice: number,
+  isLiveAccount: boolean | null,
 ) {
   const entry = Number(openOrder.filled_price ?? openOrder.requested_price)
   const qty = Number(openOrder.requested_qty)
@@ -327,6 +332,7 @@ async function publishTrade(
     strategy: strategy?.name ?? null,
     source: 'automatic',
     mode: version.mode,
+    is_live_account: isLiveAccount,
     automation_strategy_version_id: version.id,
     automation_order_id: closeOrderId,
   })
