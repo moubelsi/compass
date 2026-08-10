@@ -55,6 +55,18 @@ interface TradeRow {
   rr: number | null
 }
 
+interface OpenPositionRow {
+  id: string
+  symbol: string
+  side: 'long' | 'short'
+  filled_price: number | null
+  requested_price: number
+  requested_qty: number
+  sl: number | null
+  tp: number | null
+  created_at: string
+}
+
 function statusBadge(status: string) {
   if (status === 'active') return <span className="badge-profit">Active</span>
   if (status === 'paused') return <span className="badge-loss">Paused</span>
@@ -83,6 +95,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   const [webhook, setWebhook] = useState<WebhookRow | null>(null)
   const [events, setEvents] = useState<EventRow[]>([])
   const [trades, setTrades] = useState<TradeRow[]>([])
+  const [openPositions, setOpenPositions] = useState<OpenPositionRow[]>([])
   const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountOption[]>([])
   const [savingBroker, setSavingBroker] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -131,6 +144,19 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     }
     const { data: t } = await supabase.from('trades').select('*').eq('automation_strategy_version_id', versionId).order('trade_date', { ascending: false }).limit(50)
     setTrades(t || [])
+
+    const [{ data: entries }, { data: closes }] = await Promise.all([
+      supabase.from('automation_orders')
+        .select('id, symbol, side, filled_price, requested_price, requested_qty, sl, tp, created_at')
+        .eq('strategy_version_id', versionId).in('side', ['long', 'short']).eq('status', 'filled')
+        .order('created_at', { ascending: false }),
+      supabase.from('automation_orders')
+        .select('closes_order_id')
+        .eq('strategy_version_id', versionId).eq('side', 'close').not('closes_order_id', 'is', null),
+    ])
+    const closedIds = new Set((closes || []).map(c => c.closes_order_id as string))
+    setOpenPositions((entries || []).filter(e => !closedIds.has(e.id)))
+
     setLoading(false)
   }
 
@@ -243,7 +269,10 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
           <button style={tabBtn(tab === 'settings')} onClick={() => setTab('settings')}>Settings</button>
           <button style={tabBtn(tab === 'webhook')} onClick={() => setTab('webhook')}>Webhook</button>
           <button style={tabBtn(tab === 'signals')} onClick={() => setTab('signals')}>Signals {events.length > 0 && `(${events.length})`}</button>
-          <button style={tabBtn(tab === 'trades')} onClick={() => setTab('trades')}>Trades {trades.length > 0 && `(${trades.length})`}</button>
+          <button style={tabBtn(tab === 'trades')} onClick={() => setTab('trades')}>
+            Trades {trades.length > 0 && `(${trades.length})`}
+            {openPositions.length > 0 && <span className="badge-profit" style={{ marginLeft: 6 }}>{openPositions.length} open</span>}
+          </button>
         </div>
 
         {tab === 'settings' && (
@@ -425,25 +454,58 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
         )}
 
         {tab === 'trades' && (
-          trades.length === 0 ? (
-            <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 14, color: 'var(--text-muted)' }}>No trades published yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {trades.map(t => (
-                <div key={t.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <span className={t.direction === 'LONG' ? 'badge-profit' : 'badge-loss'}>{t.direction}</span>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{t.trade_date}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                    {t.rr != null && <span style={{ fontSize: 12, color: getPnlColor(t.rr) }}>{formatR(t.rr)}</span>}
-                    <span style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(t.pnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(t.pnl, true, symbol)}</span>
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {openPositions.length > 0 && (
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--profit)' }} />
+                  Open positions
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {openPositions.map(p => {
+                    const entryPrice = p.filled_price ?? p.requested_price
+                    return (
+                      <div key={p.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          <span className={p.side === 'long' ? 'badge-profit' : 'badge-loss'}>{p.side.toUpperCase()}</span>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.symbol}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            @ {entryPrice} · qty {p.requested_qty}
+                            {p.sl != null && ` · SL ${p.sl}`}
+                            {p.tp != null && ` · TP ${p.tp}`}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: 12, color: 'var(--text-disabled)', flexShrink: 0 }}>opened {new Date(p.created_at).toLocaleString()}</span>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          )
+                <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 8 }}>
+                  No live market price feed yet, so unrealized P&amp;L isn&apos;t shown here — send a &quot;close&quot; signal to see the realized result below.
+                </p>
+              </div>
+            )}
+
+            {trades.length === 0 ? (
+              <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 14, color: 'var(--text-muted)' }}>No trades published yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {trades.map(t => (
+                  <div key={t.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                      <span className={t.direction === 'LONG' ? 'badge-profit' : 'badge-loss'}>{t.direction}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{t.trade_date}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                      {t.rr != null && <span style={{ fontSize: 12, color: getPnlColor(t.rr) }}>{formatR(t.rr)}</span>}
+                      <span style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(t.pnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(t.pnl, true, symbol)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
