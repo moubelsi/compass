@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, BookOpen, TrendingUp, Sparkles, Settings,
-  Plus, LogOut, Moon, Sun, BookMarked, PenLine, Calculator, BookText,
+  Plus, LogOut, Moon, Sun, BookMarked, PenLine, Calculator, BookText, Bot,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -24,6 +24,7 @@ const NAV_GROUPS = [
   ],
   [
     { href: '/playbook', label: 'Playbook', icon: BookMarked },
+    { href: '/automation', label: 'Automation', icon: Bot },
   ],
   [
     { href: '/coach', label: 'AI Coach', icon: Sparkles, ai: true },
