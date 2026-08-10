@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Bot, Search } from 'lucide-react'
+import { Plus, Bot, Search, Link2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface Strategy {
@@ -70,6 +70,9 @@ export default function AutomationPage() {
                 style={{ paddingLeft: 32, width: 200, fontSize: 13 }}
               />
             </div>
+            <Link href="/automation/brokers" className="btn-secondary" style={{ fontSize: 14, padding: '10px 16px', textDecoration: 'none' }}>
+              <Link2 size={14} />Brokers
+            </Link>
             <Link href="/automation/new" className="btn-primary" style={{ fontSize: 14, padding: '10px 20px' }}>
               <Plus size={14} />New strategy
             </Link>

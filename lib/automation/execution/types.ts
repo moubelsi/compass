@@ -20,6 +20,9 @@ export interface CloseRequest {
   symbol: string
   qty: number
   price: number
+  /** The opening order's broker result — real adapters read broker-specific
+   * context from it (e.g. cTrader's positionId). Paper ignores it. */
+  openOrder: { brokerOrderId: string | null; brokerResponse: unknown }
 }
 
 export interface OrderResult {

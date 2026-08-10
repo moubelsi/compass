@@ -18,12 +18,18 @@ function credentials() {
   return { clientId, clientSecret }
 }
 
-export function getAuthUrl(redirectUri: string, state: string): string {
+/**
+ * `scope` defaults to 'accounts' (read-only — the journal-import flow).
+ * Automation's trading connection passes 'trading' explicitly: same
+ * client_id/secret, a separate authorization + token pair, stored in its
+ * own table (automation_broker_accounts) so the two are never conflated.
+ */
+export function getAuthUrl(redirectUri: string, state: string, scope: 'accounts' | 'trading' = 'accounts'): string {
   const { clientId } = credentials()
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'accounts',
+    scope,
     state,
   })
   return `${AUTH_URL}?${params}`

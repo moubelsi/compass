@@ -2,8 +2,44 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseSignal, computeIdempotencyKey } from './signal'
 import { evaluateEntryRisk, evaluateCloseRisk } from './risk'
 import { getExecutionAdapter } from './execution/registry'
+import { createCTraderAdapter } from './execution/ctrader'
+import { createOkxAdapter } from './execution/okx'
+import type { ExecutionAdapter } from './execution/types'
 import { findOpenEntryOrder } from './positions'
+import { getFreshCTraderCredentials, getOkxCredentials } from './broker-accounts'
 import { localDateStr } from '@/lib/utils'
+
+/** Resolves the adapter to execute against for this version's mode — 'paper'
+ * is always the stateless singleton; 'live' loads the version's connected
+ * broker account, decrypts its credentials just-in-time, and builds an
+ * adapter scoped to that specific account (demo or real, whichever it is). */
+async function resolveAdapter(
+  supabase: SupabaseClient,
+  version: { mode: string; broker_account_id: string | null },
+): Promise<{ adapter: ExecutionAdapter } | { error: string }> {
+  if (version.mode === 'paper') return { adapter: getExecutionAdapter('paper') }
+  if (version.mode !== 'live') return { error: `mode "${version.mode}" has no execution adapter` }
+  if (!version.broker_account_id) return { error: 'live mode has no broker account connected' }
+
+  const { data: account } = await supabase
+    .from('automation_broker_accounts')
+    .select('id, broker, is_live, status')
+    .eq('id', version.broker_account_id)
+    .single()
+  if (!account || account.status !== 'connected') return { error: 'connected broker account not found' }
+
+  if (account.broker === 'ctrader') {
+    const creds = await getFreshCTraderCredentials(supabase, account.id)
+    if (!creds) return { error: 'could not load cTrader credentials' }
+    return { adapter: createCTraderAdapter(creds, account.is_live) }
+  }
+  if (account.broker === 'okx') {
+    const creds = await getOkxCredentials(supabase, account.id)
+    if (!creds) return { error: 'could not load OKX credentials' }
+    return { adapter: createOkxAdapter(creds, account.is_live) }
+  }
+  return { error: `unknown broker "${account.broker}"` }
+}
 
 export interface WebhookRow {
   id: string
@@ -103,10 +139,9 @@ export async function processWebhookEvent(
     return { httpStatus: 200, body: { ok: true, status: 'rejected', reason: 'version_inactive' } }
   }
 
-  if (version.mode !== 'paper') {
-    // Guards against 'live' reaching here even though the mode API already
-    // blocks setting it in M1 — no live adapter exists yet.
-    await markRejected(supabase, event.id, `mode "${version.mode}" has no execution adapter yet`)
+  const resolved = await resolveAdapter(supabase, version)
+  if ('error' in resolved) {
+    await markRejected(supabase, event.id, resolved.error)
     return { httpStatus: 200, body: { ok: true, status: 'rejected', reason: 'mode_not_executable' } }
   }
 
@@ -131,7 +166,7 @@ export async function processWebhookEvent(
     return { httpStatus: 200, body: { ok: true, status: 'rejected', reason } }
   }
 
-  const adapter = getExecutionAdapter('paper')
+  const { adapter } = resolved
 
   if (signal.side === 'close') {
     return closePosition(supabase, webhook, event.id, version, signal, adapter)
@@ -146,7 +181,7 @@ async function openPosition(
   version: Record<string, unknown>,
   signal: { symbol: string; side: 'long' | 'short' | 'close'; price: number; sl: number | null; tp: number | null },
   qty: number,
-  adapter: ReturnType<typeof getExecutionAdapter>,
+  adapter: ExecutionAdapter,
 ): Promise<PipelineResult> {
   const result = await adapter.placeOrder({
     symbol: signal.symbol,
@@ -163,7 +198,7 @@ async function openPosition(
       user_id: webhook.user_id,
       strategy_version_id: version.id,
       webhook_event_id: eventId,
-      mode: 'paper',
+      mode: version.mode,
       symbol: signal.symbol,
       side: signal.side,
       order_type: 'market',
@@ -193,7 +228,7 @@ async function closePosition(
   eventId: string,
   version: Record<string, unknown>,
   signal: { symbol: string; price: number },
-  adapter: ReturnType<typeof getExecutionAdapter>,
+  adapter: ExecutionAdapter,
 ): Promise<PipelineResult> {
   const openOrder = await findOpenEntryOrder(supabase, version.id as string, signal.symbol)
   if (!openOrder) {
@@ -208,6 +243,7 @@ async function closePosition(
     symbol: signal.symbol,
     qty: Number(openOrder.requested_qty),
     price: signal.price,
+    openOrder: { brokerOrderId: openOrder.broker_order_id, brokerResponse: openOrder.broker_response },
   })
 
   const { data: closeOrder } = await supabase
@@ -217,7 +253,7 @@ async function closePosition(
       strategy_version_id: version.id,
       webhook_event_id: eventId,
       closes_order_id: openOrder.id,
-      mode: 'paper',
+      mode: version.mode,
       symbol: signal.symbol,
       side: 'close',
       order_type: 'market',
@@ -288,7 +324,7 @@ async function publishTrade(
     take_profit: openOrder.tp,
     strategy: strategy?.name ?? null,
     source: 'automatic',
-    mode: 'paper',
+    mode: version.mode,
     automation_strategy_version_id: version.id,
     automation_order_id: closeOrderId,
   })

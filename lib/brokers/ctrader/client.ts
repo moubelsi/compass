@@ -25,7 +25,18 @@ export const PT = {
   OA_ERROR_RES: 2142,
   GET_ACCOUNTS_BY_TOKEN_REQ: 2149,
   DEAL_LIST_BY_POSITION_ID_REQ: 2178,
+  NEW_ORDER_REQ: 2106,
+  CANCEL_ORDER_REQ: 2108,
+  CLOSE_POSITION_REQ: 2111,
+  RECONCILE_RES: 2125,
+  EXECUTION_EVENT: 2126,
+  ORDER_ERROR_EVENT: 2132,
 } as const
+
+/** ProtoOAOrderType */
+export const ORDER_TYPE = { MARKET: 1 } as const
+/** ProtoOATradeSide */
+export const TRADE_SIDE = { BUY: 1, SELL: 2 } as const
 
 interface Envelope {
   clientMsgId?: string
@@ -86,7 +97,7 @@ export class CTraderSession {
     this.pending.delete(msg.clientMsgId!)
     clearTimeout(entry.timer)
 
-    if (msg.payloadType === PT.ERROR || msg.payloadType === PT.OA_ERROR_RES) {
+    if (msg.payloadType === PT.ERROR || msg.payloadType === PT.OA_ERROR_RES || msg.payloadType === PT.ORDER_ERROR_EVENT) {
       entry.reject(apiError(msg.payload, 'cTrader API request failed.'))
     } else {
       entry.resolve(msg.payload ?? {})
@@ -164,5 +175,36 @@ export class CTraderSession {
   async getOpenPositionIds(ctidTraderAccountId: number): Promise<Set<number>> {
     const res = await this.request(PT.RECONCILE_REQ, { ctidTraderAccountId }, 30_000)
     return new Set((res.position ?? []).map((p: Record<string, any>) => Number(p.positionId)))
+  }
+
+  /**
+   * Market order with optional SL/TP. `volume` is in the Open API's
+   * volume-in-cents format (real units * 100). Resolves with the
+   * ProtoOAExecutionEvent payload (order/position/deal) — the caller reads
+   * the fill price and positionId from it. Rejects on ProtoOAOrderErrorEvent
+   * (handled generically in onMessage) or a request timeout.
+   */
+  async newMarketOrder(args: {
+    ctidTraderAccountId: number
+    symbolId: number
+    tradeSide: typeof TRADE_SIDE[keyof typeof TRADE_SIDE]
+    volume: number
+    stopLoss?: number
+    takeProfit?: number
+  }): Promise<Record<string, any>> {
+    return this.request(PT.NEW_ORDER_REQ, {
+      ctidTraderAccountId: args.ctidTraderAccountId,
+      symbolId: args.symbolId,
+      orderType: ORDER_TYPE.MARKET,
+      tradeSide: args.tradeSide,
+      volume: args.volume,
+      ...(args.stopLoss != null ? { stopLoss: args.stopLoss } : {}),
+      ...(args.takeProfit != null ? { takeProfit: args.takeProfit } : {}),
+    }, 30_000)
+  }
+
+  /** Closes (fully or partially) an open position by id. */
+  async closePosition(ctidTraderAccountId: number, positionId: number, volume: number): Promise<Record<string, any>> {
+    return this.request(PT.CLOSE_POSITION_REQ, { ctidTraderAccountId, positionId, volume }, 30_000)
   }
 }

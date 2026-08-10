@@ -2,9 +2,11 @@ import type { ExecutionAdapter, ExecutionAdapterId } from './types'
 import { paperExecutionAdapter } from './paper'
 
 /**
- * Execution-adapter registry. M1 only registers 'paper'. Adding cTrader/OKX
- * later (M2/M4) means implementing ExecutionAdapter and registering it here —
- * no changes to the webhook route, risk engine or pipeline.
+ * Execution-adapter registry — only 'paper' lives here, since it's a
+ * stateless singleton with no per-account state. 'ctrader' and 'okx' (M2)
+ * need a specific account's decrypted credentials per call, so pipeline.ts
+ * constructs those directly via createCTraderAdapter()/createOkxAdapter()
+ * instead of looking them up here.
  */
 const adapters: Partial<Record<ExecutionAdapterId, ExecutionAdapter>> = {
   paper: paperExecutionAdapter,

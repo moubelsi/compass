@@ -14,6 +14,7 @@ interface VersionRow {
   version_label: string
   status: 'draft' | 'active' | 'paused' | 'archived'
   mode: 'off' | 'paper' | 'live'
+  broker_account_id: string | null
   assets: string[]
   timeframes: string[]
   risk_per_trade_pct: number | null
@@ -21,6 +22,13 @@ interface VersionRow {
   max_drawdown_pct: number | null
   filters: Record<string, unknown>
   parameters: Record<string, unknown>
+}
+
+interface BrokerAccountOption {
+  id: string
+  broker: 'ctrader' | 'okx'
+  label: string
+  is_live: boolean
 }
 
 interface WebhookRow {
@@ -75,6 +83,8 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   const [webhook, setWebhook] = useState<WebhookRow | null>(null)
   const [events, setEvents] = useState<EventRow[]>([])
   const [trades, setTrades] = useState<TradeRow[]>([])
+  const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountOption[]>([])
+  const [savingBroker, setSavingBroker] = useState(false)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('settings')
   const [error, setError] = useState('')
@@ -95,11 +105,13 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   const [copied, setCopied] = useState('')
 
   async function load() {
-    const [{ data: s }, { data: v }, { data: w }] = await Promise.all([
+    const [{ data: s }, { data: v }, { data: w }, { data: ba }] = await Promise.all([
       supabase.from('automation_strategies').select('name').eq('id', strategyId).single(),
       supabase.from('automation_strategy_versions').select('*').eq('id', versionId).single(),
       supabase.from('automation_webhooks').select('*').eq('strategy_version_id', versionId).maybeSingle(),
+      supabase.from('automation_broker_accounts').select('id, broker, label, is_live').eq('status', 'connected').order('created_at', { ascending: false }),
     ])
+    setBrokerAccounts(ba || [])
     setStrategyName(s?.name || '')
     setVersion(v)
     setWebhook(w)
@@ -159,6 +171,12 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function handleModeChange(mode: string) {
+    if (mode === 'live') {
+      const account = brokerAccounts.find(a => a.id === version?.broker_account_id)
+      if (!account) { setError('Select a broker account below before switching to live.'); return }
+      const stakes = account.is_live ? 'LIVE — this places real orders with real money' : 'Demo — simulated money on the broker\'s side'
+      if (!confirm(`Switch to live mode?\n\nBroker account: ${account.broker} — ${account.label}\nStakes: ${stakes}\n\nEvery future signal will be sent to this account until you switch back.`)) return
+    }
     setChangingMode(true); setError('')
     const res = await fetch(`/api/automation/versions/${versionId}/mode`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
@@ -167,6 +185,17 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     setChangingMode(false)
     if (res.ok) load()
     else setError(data.error || 'Could not change mode.')
+  }
+
+  async function handleSelectBrokerAccount(accountId: string) {
+    setSavingBroker(true); setError('')
+    const { error: updErr } = await supabase
+      .from('automation_strategy_versions')
+      .update({ broker_account_id: accountId || null })
+      .eq('id', versionId)
+    setSavingBroker(false)
+    if (updErr) setError(updErr.message)
+    else load()
   }
 
   async function handleRotateSecret() {
@@ -219,24 +248,51 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
 
         {tab === 'settings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="card" style={{ padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Mode</p>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Controls whether signals do anything. Live isn&apos;t available yet.</p>
+            <div className="card" style={{ padding: 20 }}>
+              <div className="m-col" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)' }}>Mode</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Controls whether signals do anything.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['off', 'paper', 'live'] as const).map(m => {
+                    const liveBlocked = m === 'live' && !version.broker_account_id
+                    return (
+                      <button
+                        key={m}
+                        disabled={changingMode || liveBlocked || version.mode === m}
+                        onClick={() => handleModeChange(m)}
+                        title={liveBlocked ? 'Select a broker account below first' : undefined}
+                        className={version.mode === m ? 'btn-primary' : 'btn-secondary'}
+                        style={{ fontSize: 12, padding: '6px 12px', opacity: liveBlocked ? 0.5 : 1, cursor: liveBlocked ? 'not-allowed' : 'pointer' }}
+                      >
+                        {m === 'off' ? 'Off' : m === 'paper' ? 'Paper' : 'Live'}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {(['off', 'paper', 'live'] as const).map(m => (
-                  <button
-                    key={m}
-                    disabled={changingMode || m === 'live' || version.mode === m}
-                    onClick={() => handleModeChange(m)}
-                    title={m === 'live' ? 'Live execution lands in a later update' : undefined}
-                    className={version.mode === m ? 'btn-primary' : 'btn-secondary'}
-                    style={{ fontSize: 12, padding: '6px 12px', opacity: m === 'live' ? 0.5 : 1, cursor: m === 'live' ? 'not-allowed' : 'pointer' }}
+
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
+                <label className="label" style={{ display: 'block', marginBottom: 6 }}>Broker account (required for live)</label>
+                {brokerAccounts.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    No broker accounts connected. <Link href="/automation/brokers" style={{ color: 'var(--accent)' }}>Connect one</Link> — we recommend starting with a demo account.
+                  </p>
+                ) : (
+                  <select
+                    className="input"
+                    disabled={savingBroker}
+                    value={version.broker_account_id ?? ''}
+                    onChange={e => handleSelectBrokerAccount(e.target.value)}
+                    style={{ fontSize: 13 }}
                   >
-                    {m === 'off' ? 'Off' : m === 'paper' ? 'Paper' : 'Live'}
-                  </button>
-                ))}
+                    <option value="">— none —</option>
+                    {brokerAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.broker} — {a.label} ({a.is_live ? 'Live' : 'Demo'})</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
