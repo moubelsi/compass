@@ -177,6 +177,14 @@ export class CTraderSession {
     return new Set((res.position ?? []).map((p: Record<string, any>) => Number(p.positionId)))
   }
 
+  /** Full open-position objects (price, volume, SL/TP, ...) — used to poll for
+   * a fill price when a just-submitted market order's execution event hasn't
+   * caught up with the actual fill yet (see execution/ctrader.ts). */
+  async getOpenPositions(ctidTraderAccountId: number): Promise<Array<Record<string, any>>> {
+    const res = await this.request(PT.RECONCILE_REQ, { ctidTraderAccountId }, 30_000)
+    return res.position ?? []
+  }
+
   /**
    * Market order with optional SL/TP. `volume` is in the Open API's
    * volume-in-cents format (real units * 100). Resolves with the
