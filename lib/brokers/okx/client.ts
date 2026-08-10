@@ -5,8 +5,14 @@ import { createHmac } from 'crypto'
  * secret + passphrase). Demo vs. live is which key is connected, sent via
  * the `x-simulated-trading` header (OKX docs: 1 for demo, 0/omitted for
  * real). Spot only for now — see lib/automation/execution/okx.ts for why.
+ *
+ * OKX segregates accounts by region onto different API domains — a key
+ * created under the EEA entity (which Dutch/EU accounts are) doesn't exist
+ * on www.okx.com and fails with "API key doesn't exist" no matter how
+ * correct it is. Hardcoded to eea.okx.com since that's this app's only
+ * user; revisit with a per-account setting if that ever changes.
  */
-const BASE_URL = 'https://www.okx.com'
+const BASE_URL = 'https://eea.okx.com'
 
 export interface OkxCredentials {
   apiKey: string
@@ -79,7 +85,15 @@ export async function placeMarketOrder(creds: OkxCredentials, isDemo: boolean, a
   return { ok: true, ordId, avgPx, raw: { placed: res.data, detail: detail.data } }
 }
 
-export async function verifyCredentials(creds: OkxCredentials, isDemo: boolean): Promise<boolean> {
+export interface VerifyResult {
+  ok: boolean
+  reason?: string
+}
+
+export async function verifyCredentials(creds: OkxCredentials, isDemo: boolean): Promise<VerifyResult> {
   const res = await request(creds, isDemo, 'GET', '/api/v5/account/config')
-  return res.ok
+  if (res.ok) return { ok: true }
+  const data = res.data as { msg?: string; code?: string; data?: Array<{ sMsg?: string }> } | null
+  const reason = data?.msg || data?.data?.[0]?.sMsg || `HTTP ${res.status}${data?.code ? ` (OKX code ${data.code})` : ''}`
+  return { ok: false, reason }
 }

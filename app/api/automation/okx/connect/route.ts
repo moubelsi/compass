@@ -19,10 +19,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'API key, secret and passphrase are all required.' }, { status: 400 })
   }
 
-  const creds: OkxCredentials = { apiKey, apiSecret, passphrase }
-  const ok = await verifyCredentials(creds, !isLive)
-  if (!ok) {
-    return NextResponse.json({ error: 'OKX rejected these credentials — double-check the key, secret, passphrase and whether this is a Demo Trading key.' }, { status: 400 })
+  // The "API key" vs "API secret" fields are easy to swap by mistake — both
+  // are similar-looking opaque strings, and OKX's own UI shows them in a
+  // different order than ours. If the given order fails, try it swapped
+  // before giving up; a swap only ever succeeds if that's what was actually
+  // mixed up (a wrong key/secret pair fails identically either way).
+  let creds: OkxCredentials = { apiKey, apiSecret, passphrase }
+  let verified = await verifyCredentials(creds, !isLive)
+  if (!verified.ok) {
+    const swapped: OkxCredentials = { apiKey: apiSecret, apiSecret: apiKey, passphrase }
+    const swappedVerified = await verifyCredentials(swapped, !isLive)
+    if (swappedVerified.ok) {
+      creds = swapped
+      verified = swappedVerified
+    }
+  }
+  if (!verified.ok) {
+    return NextResponse.json({ error: `OKX rejected these credentials: ${verified.reason ?? 'unknown reason'}` }, { status: 400 })
   }
 
   const { data: saved, error } = await supabase

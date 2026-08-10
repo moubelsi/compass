@@ -203,6 +203,7 @@ async function openPosition(
       side: signal.side,
       order_type: 'market',
       requested_price: signal.price,
+      filled_price: result.filledPrice,
       requested_qty: qty,
       sl: signal.sl,
       tp: signal.tp,
@@ -258,6 +259,7 @@ async function closePosition(
       side: 'close',
       order_type: 'market',
       requested_price: signal.price,
+      filled_price: result.filledPrice,
       requested_qty: openOrder.requested_qty,
       status: result.status === 'filled' ? 'filled' : 'rejected',
       broker_order_id: result.brokerOrderId,
@@ -268,7 +270,7 @@ async function closePosition(
     .single()
 
   if (result.status === 'filled' && closeOrder) {
-    await publishTrade(supabase, webhook.user_id, version, openOrder, closeOrder.id, signal.price)
+    await publishTrade(supabase, webhook.user_id, version, openOrder, closeOrder.id, result.filledPrice ?? signal.price)
   }
 
   await supabase
@@ -290,7 +292,7 @@ async function publishTrade(
   closeOrderId: string,
   exitPrice: number,
 ) {
-  const entry = Number(openOrder.requested_price)
+  const entry = Number(openOrder.filled_price ?? openOrder.requested_price)
   const qty = Number(openOrder.requested_qty)
   const sign = openOrder.side === 'long' ? 1 : -1
   const pnl = sign * (exitPrice - entry) * qty
