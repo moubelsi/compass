@@ -212,6 +212,7 @@ export async function POST() {
     .from('trades')
     .select('symbol, direction, pnl, return_pct, rr, strategy, trade_type, confidence, followed_plan, trade_date, created_at, notes, screenshot_url, broker_metadata')
     .eq('user_id', user.id)
+    .eq('source', 'manual')
     .order('trade_date', { ascending: false, nullsFirst: false })
     .limit(300)
 

@@ -519,6 +519,7 @@ export default function DashboardPage() {
 
     fetchAllRows((from, to) => supabase.from('trades')
       .select('id, symbol, direction, strategy, pnl, return_pct, created_at, trade_date, followed_plan, trade_type, confidence, screenshot_url')
+      .eq('source', 'manual')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, to))

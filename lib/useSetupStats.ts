@@ -17,7 +17,7 @@ export function useSetupStats(): { statsByName: Record<string, SetupStats>; load
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    fetchAllRows((from, to) => supabase.from('trades').select('strategy, pnl').not('strategy', 'is', null).range(from, to))
+    fetchAllRows((from, to) => supabase.from('trades').select('strategy, pnl').not('strategy', 'is', null).eq('source', 'manual').range(from, to))
       .then(rows => {
         const map: Record<string, SetupStats> = {}
         for (const t of rows) {

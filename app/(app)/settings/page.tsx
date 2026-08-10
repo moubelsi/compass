@@ -30,7 +30,7 @@ export default function SettingsPage() {
     async function load() {
       const [{ data: { user } }, tradeRows] = await Promise.all([
         supabase.auth.getUser(),
-        fetchAllRows((from, to) => supabase.from('trades').select('*').order('trade_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).range(from, to)).catch(() => []),
+        fetchAllRows((from, to) => supabase.from('trades').select('*').eq('source', 'manual').order('trade_date', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).range(from, to)).catch(() => []),
       ])
       setEmail(user?.email ?? '')
       setTrades(tradeRows)

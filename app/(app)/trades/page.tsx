@@ -107,6 +107,7 @@ export default function TradesPage() {
 
     fetchAllRows((from, to) => supabase.from('trades')
       .select('*')
+      .eq('source', 'manual')
       .order('trade_date', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .range(from, to))

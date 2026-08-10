@@ -112,6 +112,7 @@ export default function AnalyticsPage() {
       const data = await fetchAllRows((from, to) => supabase
         .from('trades')
         .select('id, symbol, direction, pnl, rr, return_pct, strategy, created_at, trade_date, trade_type, confidence, followed_plan, notes, screenshot_url, broker_metadata')
+        .eq('source', 'manual')
         .order('trade_date', { ascending: true, nullsFirst: true })
         .order('created_at', { ascending: true })
         .range(from, to)).catch(() => [])

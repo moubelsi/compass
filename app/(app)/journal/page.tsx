@@ -371,6 +371,7 @@ function JournalPageInner() {
     const since = new Date(Date.now() - 90 * 86400000).toISOString()
     fetchAllRows((from, to) => supabase.from('trades')
       .select('id, symbol, pnl, return_pct, rr, strategy, trade_date, created_at, direction, notes, screenshot_url, followed_plan, trade_type, confidence')
+      .eq('source', 'manual')
       .gte('created_at', since)
       .order('created_at', { ascending: true })
       .range(from, to))

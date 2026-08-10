@@ -991,7 +991,7 @@ export default function NotebookPage() {
       const since = new Date(); since.setFullYear(since.getFullYear() - 2)
       const sinceStr = since.toISOString().slice(0, 10)
       const [tData, { data: kData }] = await Promise.all([
-        fetchAllRows((from, to) => supabase.from('trades').select('id, symbol, direction, pnl, return_pct, rr, trade_date, created_at').gte('trade_date', sinceStr).order('trade_date').range(from, to)).catch(() => []),
+        fetchAllRows((from, to) => supabase.from('trades').select('id, symbol, direction, pnl, return_pct, rr, trade_date, created_at').eq('source', 'manual').gte('trade_date', sinceStr).order('trade_date').range(from, to)).catch(() => []),
         supabase.from('notebook_pages').select('*'),
       ])
       setTrades(tData as Trade[])
