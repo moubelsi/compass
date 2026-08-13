@@ -85,6 +85,56 @@ export async function placeMarketOrder(creds: OkxCredentials, isDemo: boolean, a
   return { ok: true, ordId, avgPx, raw: { placed: res.data, detail: detail.data } }
 }
 
+/**
+ * Places a spot-margin (cross) market order with optional attached SL/TP
+ * (OKX's native `attachAlgoOrds`, executed exchange-side on trigger).
+ * `side: 'sell'` without holding the base currency opens a short by
+ * borrowing it — that's the whole point of trading this instId with
+ * tdMode `cross` instead of `cash`. No separate leverage-setting call: unlike
+ * futures/swap, OKX spot margin doesn't take an explicit leverage parameter
+ * — the effective leverage falls out of position size vs. account equity,
+ * which our own risk engine already controls via qty.
+ *
+ * Confirmed 2026-08-12 against this account: BTC-EUR only supports `cross`
+ * margin, not `isolated` (OKX doesn't list an isolated-margin variant for
+ * this pair at all — a product gap, not a config issue).
+ */
+export async function placeMarginOrder(creds: OkxCredentials, isDemo: boolean, args: {
+  instId: string
+  side: 'buy' | 'sell'
+  sz: string
+  sl: number | null
+  tp: number | null
+}): Promise<OkxOrderResult> {
+  const attachAlgoOrds: Record<string, string>[] = []
+  if (args.sl != null || args.tp != null) {
+    const algo: Record<string, string> = {}
+    if (args.sl != null) { algo.slTriggerPx = String(args.sl); algo.slOrdPx = '-1'; algo.slTriggerPxType = 'last' }
+    if (args.tp != null) { algo.tpTriggerPx = String(args.tp); algo.tpOrdPx = '-1'; algo.tpTriggerPxType = 'last' }
+    attachAlgoOrds.push(algo)
+  }
+
+  const res = await request(creds, isDemo, 'POST', '/api/v5/trade/order', {
+    instId: args.instId,
+    tdMode: 'cross',
+    side: args.side,
+    ordType: 'market',
+    sz: args.sz,
+    ...(args.side === 'buy' ? { tgtCcy: 'base_ccy' } : {}),
+    ...(attachAlgoOrds.length > 0 ? { attachAlgoOrds } : {}),
+  })
+  const order = res.data?.data?.[0]
+  const ordId = order?.ordId ?? null
+  if (!res.ok || !ordId || order?.sCode !== '0') {
+    return { ok: false, ordId, avgPx: null, raw: res.data }
+  }
+
+  await new Promise(r => setTimeout(r, 600))
+  const detail = await request(creds, isDemo, 'GET', `/api/v5/trade/order?instId=${args.instId}&ordId=${ordId}`)
+  const avgPx = Number(detail.data?.data?.[0]?.avgPx) || null
+  return { ok: true, ordId, avgPx, raw: { placed: res.data, detail: detail.data, openSide: args.side } }
+}
+
 export interface VerifyResult {
   ok: boolean
   reason?: string

@@ -34,8 +34,13 @@ export function parseSignal(body: unknown): { ok: true; data: Signal } | { ok: f
   if (typeof b.ticker !== 'string' || b.ticker.length === 0) {
     errors.push('ticker must be a non-empty string')
   }
-  if (typeof b.side !== 'string' || !SIDES.includes(b.side as SignalSide)) {
-    errors.push(`side must be one of: ${SIDES.join(', ')}`)
+  // TradingView's {{strategy.market_position}} placeholder emits "flat" for
+  // a fully-closed position — accept it as an alias so one alert message can
+  // cover entries and exits for both long and short without hand-editing
+  // Pine code per direction.
+  const normalizedSide = b.side === 'flat' ? 'close' : b.side
+  if (typeof normalizedSide !== 'string' || !SIDES.includes(normalizedSide as SignalSide)) {
+    errors.push(`side must be one of: ${SIDES.join(', ')} (or "flat", treated as "close")`)
   }
   if (typeof b.price !== 'number' || !Number.isFinite(b.price)) {
     errors.push('price must be a number')
@@ -56,7 +61,7 @@ export function parseSignal(body: unknown): { ok: true; data: Signal } | { ok: f
     ok: true,
     data: {
       symbol: b.ticker as string,
-      side: b.side as SignalSide,
+      side: normalizedSide as SignalSide,
       price: b.price as number,
       sl: (b.sl as number) ?? null,
       tp: (b.tp as number) ?? null,
