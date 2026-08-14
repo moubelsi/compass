@@ -51,10 +51,31 @@ interface TradeRow {
   trade_date: string
   symbol: string
   direction: 'LONG' | 'SHORT'
+  entry_price: number | null
+  exit_price: number | null
   pnl: number
   rr: number | null
   mode: 'paper' | 'live' | 'backtest' | null
   is_live_account: boolean | null
+}
+
+interface LivePnl {
+  currentPrice: number | null
+  unrealizedPnl: number | null
+  unrealizedReturnPct: number | null
+}
+
+interface TradeStats {
+  count: number
+  winRate: number | null
+  totalPnl: number
+}
+
+function computeStats(trades: TradeRow[]): TradeStats {
+  const count = trades.length
+  const wins = trades.filter(t => Number(t.pnl) > 0).length
+  const totalPnl = trades.reduce((sum, t) => sum + Number(t.pnl || 0), 0)
+  return { count, winRate: count > 0 ? (wins / count) * 100 : null, totalPnl }
 }
 
 interface OpenPositionRow {
@@ -111,6 +132,10 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   const [events, setEvents] = useState<EventRow[]>([])
   const [trades, setTrades] = useState<TradeRow[]>([])
   const [openPositions, setOpenPositions] = useState<OpenPositionRow[]>([])
+  const [livePnl, setLivePnl] = useState<Record<string, LivePnl>>({})
+  const [pnlLoading, setPnlLoading] = useState(false)
+  const [pnlUpdatedAt, setPnlUpdatedAt] = useState<Date | null>(null)
+  const [stats, setStats] = useState<TradeStats>({ count: 0, winRate: null, totalPnl: 0 })
   const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountOption[]>([])
   const [savingBroker, setSavingBroker] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -159,6 +184,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     }
     const { data: t } = await supabase.from('trades').select('*').eq('automation_strategy_version_id', versionId).order('trade_date', { ascending: false }).limit(50)
     setTrades(t || [])
+    setStats(computeStats(t || []))
 
     const [{ data: entries }, { data: closes }] = await Promise.all([
       supabase.from('automation_orders')
@@ -175,7 +201,32 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     setLoading(false)
   }
 
+  async function loadLivePnl() {
+    setPnlLoading(true)
+    try {
+      const res = await fetch(`/api/automation/versions/${versionId}/open-positions`)
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.positions) {
+        setLivePnl(data.positions)
+        setPnlUpdatedAt(new Date())
+      }
+    } finally {
+      setPnlLoading(false)
+    }
+  }
+
   useEffect(() => { Promise.resolve().then(load) }, [versionId])
+
+  // Poll live P&L for open positions every 20s while this page is open —
+  // only when there's actually something open, so idle versions don't spam
+  // the broker API for nothing.
+  const openPositionIds = openPositions.map(p => p.id).join(',')
+  useEffect(() => {
+    if (!openPositionIds) return
+    Promise.resolve().then(loadLivePnl)
+    const interval = setInterval(loadLivePnl, 20_000)
+    return () => clearInterval(interval)
+  }, [openPositionIds])
 
   const isDraft = version?.status === 'draft'
 
@@ -470,56 +521,122 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
 
         {tab === 'trades' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {(trades.length > 0 || openPositions.length > 0) && (
+              <div className="card m-grid-2" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: `repeat(${openPositions.length > 0 ? 4 : 3}, 1fr)`, gap: 16 }}>
+                <div>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Closed trades</p>
+                  <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{stats.count}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Win rate</p>
+                  <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{stats.winRate != null ? `${stats.winRate.toFixed(0)}%` : '—'}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Realized P&amp;L</p>
+                  <p style={{ fontSize: 18, fontWeight: 600, color: getPnlColor(stats.totalPnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(stats.totalPnl, true, symbol)}</p>
+                </div>
+                {openPositions.length > 0 && (() => {
+                  const values = openPositions.map(p => livePnl[p.id]?.unrealizedPnl).filter((v): v is number => v != null)
+                  const total = values.length > 0 ? values.reduce((s, v) => s + v, 0) : null
+                  return (
+                    <div>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Unrealized P&amp;L</p>
+                      <p style={{ fontSize: 18, fontWeight: 600, color: total != null ? getPnlColor(total) : 'var(--text-disabled)', fontVariantNumeric: 'tabular-nums' }}>
+                        {total != null ? formatCurrency(total, true, symbol) : '—'}
+                      </p>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
             {openPositions.length > 0 && (
               <div>
-                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--profit)' }} />
-                  Open positions
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--profit)' }} />
+                    Open positions
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
+                      {pnlLoading ? 'Updating…' : pnlUpdatedAt ? `Updated ${pnlUpdatedAt.toLocaleTimeString()}` : ''}
+                    </span>
+                    <button className="btn-ghost" onClick={loadLivePnl} disabled={pnlLoading} style={{ fontSize: 12, padding: '4px 6px' }}>
+                      <RefreshCw size={12} />
+                    </button>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {openPositions.map(p => {
                     const entryPrice = p.filled_price ?? p.requested_price
+                    const live = livePnl[p.id]
                     return (
                       <div key={p.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
                           {stakesBadge(p.mode, p.is_live_account)}
                           <span className={p.side === 'long' ? 'badge-profit' : 'badge-loss'}>{p.side.toUpperCase()}</span>
                           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.symbol}</span>
                           <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-                            @ {entryPrice} · qty {p.requested_qty}
+                            entry {entryPrice} · qty {p.requested_qty}
                             {p.sl != null && ` · SL ${p.sl}`}
                             {p.tp != null && ` · TP ${p.tp}`}
                           </span>
                         </div>
-                        <span style={{ fontSize: 12, color: 'var(--text-disabled)', flexShrink: 0 }}>opened {new Date(p.created_at).toLocaleString()}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
+                              {live?.currentPrice != null ? `now ${live.currentPrice}` : pnlLoading ? 'loading…' : 'price unavailable'}
+                            </p>
+                            <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>opened {new Date(p.created_at).toLocaleString()}</p>
+                          </div>
+                          <div style={{ textAlign: 'right', minWidth: 90 }}>
+                            {live?.unrealizedPnl != null ? (
+                              <>
+                                <p style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(live.unrealizedPnl), fontVariantNumeric: 'tabular-nums' }}>
+                                  {formatCurrency(live.unrealizedPnl, true, symbol)}
+                                </p>
+                                {live.unrealizedReturnPct != null && (
+                                  <p style={{ fontSize: 11, color: getPnlColor(live.unrealizedReturnPct) }}>{live.unrealizedReturnPct >= 0 ? '+' : ''}{live.unrealizedReturnPct.toFixed(2)}%</p>
+                                )}
+                              </>
+                            ) : (
+                              <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>—</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-                <p style={{ fontSize: 11, color: 'var(--text-disabled)', marginTop: 8 }}>
-                  No live market price feed yet, so unrealized P&amp;L isn&apos;t shown here — send a &quot;close&quot; signal to see the realized result below.
-                </p>
               </div>
             )}
 
             {trades.length === 0 ? (
               <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 14, color: 'var(--text-muted)' }}>No trades published yet.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {trades.map(t => (
-                  <div key={t.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                      {stakesBadge(t.mode, t.is_live_account)}
-                      <span className={t.direction === 'LONG' ? 'badge-profit' : 'badge-loss'}>{t.direction}</span>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
-                      <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{t.trade_date}</span>
+              <div>
+                {openPositions.length > 0 && (
+                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 10 }}>Closed trades</p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {trades.map(t => (
+                    <div key={t.id} className="card m-col" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
+                        {stakesBadge(t.mode, t.is_live_account)}
+                        <span className={t.direction === 'LONG' ? 'badge-profit' : 'badge-loss'}>{t.direction}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{t.symbol}</span>
+                        {t.entry_price != null && t.exit_price != null && (
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{t.entry_price} → {t.exit_price}</span>
+                        )}
+                        <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{t.trade_date}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                        {t.rr != null && <span style={{ fontSize: 12, color: getPnlColor(t.rr) }}>{formatR(t.rr)}</span>}
+                        <span style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(t.pnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(t.pnl, true, symbol)}</span>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                      {t.rr != null && <span style={{ fontSize: 12, color: getPnlColor(t.rr) }}>{formatR(t.rr)}</span>}
-                      <span style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(t.pnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(t.pnl, true, symbol)}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>

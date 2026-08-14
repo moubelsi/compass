@@ -135,6 +135,15 @@ export async function placeMarginOrder(creds: OkxCredentials, isDemo: boolean, a
   return { ok: true, ordId, avgPx, raw: { placed: res.data, detail: detail.data, openSide: args.side } }
 }
 
+/** Live last-traded price — public endpoint, no signing needed. Used as the
+ * current-price proxy for unrealized P&L on open positions. */
+export async function getTickerPrice(instId: string): Promise<number | null> {
+  const res = await fetch(`${BASE_URL}/api/v5/market/ticker?instId=${instId}`)
+  const data = await res.json().catch(() => null) as { data?: Array<{ last?: string }> } | null
+  const last = data?.data?.[0]?.last
+  return last ? Number(last) : null
+}
+
 export interface VerifyResult {
   ok: boolean
   reason?: string

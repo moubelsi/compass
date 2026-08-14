@@ -20,6 +20,7 @@ export const PT = {
   ASSET_LIST_REQ: 2112,
   SYMBOLS_LIST_REQ: 2114,
   SYMBOL_BY_ID_REQ: 2116,
+  GET_TRENDBARS_REQ: 2137,
   TRADER_REQ: 2121,
   RECONCILE_REQ: 2124,
   DEAL_LIST_REQ: 2133,
@@ -168,6 +169,36 @@ export class CTraderSession {
   async getSymbolDetails(ctidTraderAccountId: number, symbolId: number): Promise<Record<string, any> | undefined> {
     const res = await this.request(PT.SYMBOL_BY_ID_REQ, { ctidTraderAccountId, symbolId: [symbolId] })
     return (res.symbol ?? [])[0]
+  }
+
+  /**
+   * Latest close price from the most recent 1-minute trendbar — used as a
+   * live/current-price proxy for unrealized P&L, since the Open API has no
+   * plain "get quote" request without an active spot subscription.
+   * Trendbar prices are delta-encoded from `low` and scaled ×100,000
+   * regardless of the symbol's own decimal digits — undocumented, confirmed
+   * empirically against a real GER40 bar (2026-08-14): low=2651150000 →
+   * 26511.5, matching the live index price at that moment.
+   *
+   * `count: 1` comes back with zero bars (confirmed empirically) — cTrader
+   * seems to need a wider ask to actually return the most recent one, so
+   * this asks for several and takes the last (most recent) of whatever
+   * comes back.
+   */
+  async getLatestPrice(ctidTraderAccountId: number, symbolId: number): Promise<number | null> {
+    const now = Date.now()
+    const res = await this.request(PT.GET_TRENDBARS_REQ, {
+      ctidTraderAccountId,
+      symbolId,
+      period: 'M1',
+      fromTimestamp: now - 10 * 60 * 1000,
+      toTimestamp: now,
+      count: 5,
+    }, 15_000)
+    const bars = res.trendbar ?? []
+    const last = bars[bars.length - 1]
+    if (!last) return null
+    return (Number(last.low) + Number(last.deltaClose)) / 100_000
   }
 
   /** Executed deals in [fromTimestamp, toTimestamp] (ms since epoch, max 1 week apart). */
