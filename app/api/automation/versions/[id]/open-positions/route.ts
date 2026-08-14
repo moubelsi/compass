@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServer } from '@/lib/supabase-server'
-import { getFreshCTraderCredentials } from '@/lib/automation/broker-accounts'
-import { CTraderSession, type CTraderHost } from '@/lib/brokers/ctrader/client'
-import { getTickerPrice } from '@/lib/brokers/okx/client'
+import { getLivePricesForBrokerAccount, computeUnrealizedPnl } from '@/lib/automation/live-prices'
 
 interface OpenPositionRow {
   id: string
@@ -15,11 +13,9 @@ interface OpenPositionRow {
 
 /**
  * Live/unrealized P&L for a version's open positions — a page-load pull, not
- * a stream. Mirrors publishTrade()'s realized-P&L formula (pipeline.ts) so
- * the unrealized number a user sees here matches what they'd get if they
- * closed right now. Broker calls happen here (server-side, decrypted
- * credentials) rather than client-side, same boundary as every other
- * execution-adapter call in this app.
+ * a stream. Broker calls happen here (server-side, decrypted credentials)
+ * rather than client-side, same boundary as every other execution-adapter
+ * call in this app.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -53,44 +49,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const symbols = [...new Set(openPositions.map(p => p.symbol))]
-  const priceBySymbol: Record<string, number | null> = {}
-
-  try {
-    if (account.broker === 'ctrader') {
-      const creds = await getFreshCTraderCredentials(supabase, version.broker_account_id)
-      if (creds) {
-        const host: CTraderHost = account.is_live ? 'live' : 'demo'
-        const session = await CTraderSession.connect(host)
-        try {
-          await session.authAccount(creds.ctidTraderAccountId, creds.accessToken)
-          const allSymbols = await session.getSymbols(creds.ctidTraderAccountId)
-          for (const sym of symbols) {
-            const match = allSymbols.find(s => String(s.symbolName ?? '').toUpperCase() === sym.toUpperCase())
-            priceBySymbol[sym] = match ? await session.getLatestPrice(creds.ctidTraderAccountId, Number(match.symbolId)) : null
-          }
-        } finally {
-          session.close()
-        }
-      }
-    } else if (account.broker === 'okx') {
-      for (const sym of symbols) {
-        priceBySymbol[sym] = await getTickerPrice(sym)
-      }
-    }
-  } catch {
-    // Best-effort — a broker/network hiccup here shouldn't break the page;
-    // positions simply come back with null prices and the UI falls back to
-    // "unavailable" rather than a failed request.
-  }
+  const priceBySymbol = await getLivePricesForBrokerAccount(supabase, version.broker_account_id, account.broker, account.is_live, symbols)
 
   for (const p of openPositions) {
-    const currentPrice = priceBySymbol[p.symbol] ?? null
     const entry = p.filled_price ?? p.requested_price
-    const qty = Number(p.requested_qty)
-    const sign = p.side === 'long' ? 1 : -1
-    const unrealizedPnl = currentPrice != null ? sign * (currentPrice - entry) * qty : null
-    const unrealizedReturnPct = unrealizedPnl != null && entry !== 0 ? (unrealizedPnl / (entry * qty)) * 100 : null
-    positions[p.id] = { currentPrice, unrealizedPnl, unrealizedReturnPct }
+    positions[p.id] = { currentPrice: priceBySymbol[p.symbol] ?? null, ...computeUnrealizedPnl(p.side, entry, Number(p.requested_qty), priceBySymbol[p.symbol] ?? null) }
   }
 
   return NextResponse.json({ positions })
