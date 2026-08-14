@@ -160,6 +160,16 @@ export class CTraderSession {
     return res.symbol ?? []
   }
 
+  /** Full per-symbol trading spec (lotSize, minVolume, maxVolume, stepVolume,
+   * ...) — the light getSymbols() list doesn't carry these, and they vary
+   * wildly by instrument type (confirmed: EURUSD's volume step is nothing
+   * like an index CFD's or a crypto CFD's). Needed to size orders correctly
+   * per symbol instead of assuming one instrument's step fits all. */
+  async getSymbolDetails(ctidTraderAccountId: number, symbolId: number): Promise<Record<string, any> | undefined> {
+    const res = await this.request(PT.SYMBOL_BY_ID_REQ, { ctidTraderAccountId, symbolId: [symbolId] })
+    return (res.symbol ?? [])[0]
+  }
+
   /** Executed deals in [fromTimestamp, toTimestamp] (ms since epoch, max 1 week apart). */
   async getDeals(ctidTraderAccountId: number, fromTimestamp: number, toTimestamp: number, maxRows = 500): Promise<Array<Record<string, any>>> {
     const res = await this.request(PT.DEAL_LIST_REQ, { ctidTraderAccountId, fromTimestamp, toTimestamp, maxRows }, 30_000)
