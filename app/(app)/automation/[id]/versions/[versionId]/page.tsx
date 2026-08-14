@@ -136,10 +136,11 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   const [pnlLoading, setPnlLoading] = useState(false)
   const [pnlUpdatedAt, setPnlUpdatedAt] = useState<Date | null>(null)
   const [stats, setStats] = useState<TradeStats>({ count: 0, winRate: null, totalPnl: 0 })
+  const [closingSymbol, setClosingSymbol] = useState<string | null>(null)
   const [brokerAccounts, setBrokerAccounts] = useState<BrokerAccountOption[]>([])
   const [savingBroker, setSavingBroker] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<Tab>('settings')
+  const [tab, setTab] = useState<Tab>('trades')
   const [error, setError] = useState('')
 
   const [versionLabel, setVersionLabel] = useState('')
@@ -227,6 +228,24 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     const interval = setInterval(loadLivePnl, 20_000)
     return () => clearInterval(interval)
   }, [openPositionIds])
+
+  async function handleClosePosition(positionSymbol: string) {
+    if (!confirm(`Close the open ${positionSymbol} position? This sends a real close order to the broker right now.`)) return
+    setClosingSymbol(positionSymbol)
+    try {
+      const res = await fetch(`/api/automation/versions/${versionId}/close`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: positionSymbol }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.status !== 'position_closed') {
+        setError(data?.error || data?.reason || 'Could not close the position.')
+        return
+      }
+      load()
+    } finally {
+      setClosingSymbol(null)
+    }
+  }
 
   const isDraft = version?.status === 'draft'
 
@@ -332,13 +351,14 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
         {error && <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--loss-dim)', border: '1px solid rgba(192,57,43,0.2)', fontSize: 14, color: 'var(--loss)', marginBottom: 20 }}>{error}</div>}
 
         <div className="m-wrap" style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 10 }}>
-          <button style={tabBtn(tab === 'settings')} onClick={() => setTab('settings')}>Settings</button>
-          <button style={tabBtn(tab === 'webhook')} onClick={() => setTab('webhook')}>Webhook</button>
-          <button style={tabBtn(tab === 'signals')} onClick={() => setTab('signals')}>Signals {events.length > 0 && `(${events.length})`}</button>
           <button style={tabBtn(tab === 'trades')} onClick={() => setTab('trades')}>
             Trades {trades.length > 0 && `(${trades.length})`}
             {openPositions.length > 0 && <span className="badge-profit" style={{ marginLeft: 6 }}>{openPositions.length} open</span>}
           </button>
+          <button style={tabBtn(tab === 'signals')} onClick={() => setTab('signals')}>Signals {events.length > 0 && `(${events.length})`}</button>
+          <span style={{ flex: 1 }} />
+          <button style={tabBtn(tab === 'webhook')} onClick={() => setTab('webhook')}>Webhook</button>
+          <button style={tabBtn(tab === 'settings')} onClick={() => setTab('settings')}>Settings</button>
         </div>
 
         {tab === 'settings' && (
@@ -603,6 +623,9 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                               <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>—</p>
                             )}
                           </div>
+                          <button className="btn-secondary" onClick={() => handleClosePosition(p.symbol)} disabled={closingSymbol === p.symbol} style={{ fontSize: 12, padding: '5px 10px' }}>
+                            {closingSymbol === p.symbol ? 'Closing…' : 'Close'}
+                          </button>
                         </div>
                       </div>
                     )

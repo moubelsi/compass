@@ -36,6 +36,57 @@ interface OpenPositionSummary {
   unrealizedReturnPct: number | null
 }
 
+interface AutomationTradeRow {
+  pnl: number
+  is_live_account: boolean | null
+  automation_strategy_version_id: string | null
+  automation_strategy_versions: { strategy_id: string; automation_strategies: { name: string } | null } | null
+}
+
+interface StrategyAnalytics {
+  strategyId: string
+  strategyName: string
+  count: number
+  winRate: number | null
+  totalPnl: number
+}
+
+interface Analytics {
+  count: number
+  winRate: number | null
+  totalPnlLive: number
+  totalPnlDemo: number
+  byStrategy: StrategyAnalytics[]
+}
+
+function computeAnalytics(rows: AutomationTradeRow[]): Analytics {
+  const count = rows.length
+  const wins = rows.filter(r => Number(r.pnl) > 0).length
+  const totalPnlLive = rows.filter(r => r.is_live_account === true).reduce((s, r) => s + Number(r.pnl || 0), 0)
+  const totalPnlDemo = rows.filter(r => r.is_live_account !== true).reduce((s, r) => s + Number(r.pnl || 0), 0)
+
+  const byStrategyMap = new Map<string, { name: string; rows: AutomationTradeRow[] }>()
+  for (const r of rows) {
+    const strategyId = r.automation_strategy_versions?.strategy_id
+    if (!strategyId) continue
+    const name = r.automation_strategy_versions?.automation_strategies?.name ?? 'Strategy'
+    if (!byStrategyMap.has(strategyId)) byStrategyMap.set(strategyId, { name, rows: [] })
+    byStrategyMap.get(strategyId)!.rows.push(r)
+  }
+  const byStrategy: StrategyAnalytics[] = [...byStrategyMap.entries()].map(([strategyId, { name, rows: sr }]) => {
+    const sWins = sr.filter(r => Number(r.pnl) > 0).length
+    return {
+      strategyId,
+      strategyName: name,
+      count: sr.length,
+      winRate: sr.length > 0 ? (sWins / sr.length) * 100 : null,
+      totalPnl: sr.reduce((s, r) => s + Number(r.pnl || 0), 0),
+    }
+  }).sort((a, b) => b.count - a.count)
+
+  return { count, winRate: count > 0 ? (wins / count) * 100 : null, totalPnlLive, totalPnlDemo, byStrategy }
+}
+
 function modeBadge(mode: string) {
   if (mode === 'live') return <span className="badge-loss">Live</span>
   if (mode === 'paper') return <span className="badge-profit">Paper</span>
@@ -52,14 +103,20 @@ export default function AutomationPage() {
   const [openPositions, setOpenPositions] = useState<OpenPositionSummary[]>([])
   const [pnlLoading, setPnlLoading] = useState(false)
   const [pnlUpdatedAt, setPnlUpdatedAt] = useState<Date | null>(null)
+  const [closingId, setClosingId] = useState<string | null>(null)
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
 
   useEffect(() => {
     Promise.all([
       supabase.from('automation_strategies').select('*').order('created_at', { ascending: false }),
       supabase.from('automation_strategy_versions').select('strategy_id, status, mode'),
-    ]).then(([s, v]) => {
+      supabase.from('trades')
+        .select('pnl, is_live_account, automation_strategy_version_id, automation_strategy_versions(strategy_id, automation_strategies(name))')
+        .eq('source', 'automatic'),
+    ]).then(([s, v, t]) => {
       setStrategies(s.data || [])
       setVersions(v.data || [])
+      setAnalytics(computeAnalytics((t.data as unknown as AutomationTradeRow[]) || []))
       setLoading(false)
     })
   }, [])
@@ -85,6 +142,24 @@ export default function AutomationPage() {
     const interval = setInterval(loadOpenPositions, 20_000)
     return () => clearInterval(interval)
   }, [])
+
+  async function handleClosePosition(p: OpenPositionSummary) {
+    if (!confirm(`Close ${p.side.toUpperCase()} ${p.symbol} (${p.strategyName})? This sends a real close order to the broker right now.`)) return
+    setClosingId(p.id)
+    try {
+      const res = await fetch(`/api/automation/versions/${p.versionId}/close`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: p.symbol }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.status !== 'position_closed') {
+        alert(data?.error || data?.reason || 'Could not close the position.')
+        return
+      }
+      loadOpenPositions()
+    } finally {
+      setClosingId(null)
+    }
+  }
 
   const q = search.toLowerCase()
   const filtered = search
@@ -151,17 +226,17 @@ export default function AutomationPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {openPositions.map(p => (
-                  <Link key={p.id} href={`/automation/${p.strategyId}/versions/${p.versionId}`} style={{ textDecoration: 'none' }}>
-                    <div className="m-col" style={{ padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'var(--bg-elevated)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap' }}>
-                        <span className={p.side === 'long' ? 'badge-profit' : 'badge-loss'}>{p.side.toUpperCase()}</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.symbol}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.strategyName} · {p.versionLabel}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontVariantNumeric: 'tabular-nums' }}>
-                          {p.entryPrice}{p.currentPrice != null && ` → ${p.currentPrice}`}
-                        </span>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div key={p.id} className="m-col" style={{ padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'var(--bg-elevated)' }}>
+                    <Link href={`/automation/${p.strategyId}/versions/${p.versionId}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexWrap: 'wrap', flex: 1 }}>
+                      <span className={p.side === 'long' ? 'badge-profit' : 'badge-loss'}>{p.side.toUpperCase()}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{p.symbol}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.strategyName} · {p.versionLabel}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-disabled)', fontVariantNumeric: 'tabular-nums' }}>
+                        {p.entryPrice}{p.currentPrice != null && ` → ${p.currentPrice}`}
+                      </span>
+                    </Link>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                      <div style={{ textAlign: 'right' }}>
                         {p.unrealizedPnl != null ? (
                           <>
                             <p style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(p.unrealizedPnl), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(p.unrealizedPnl, true, symbol)}</p>
@@ -173,13 +248,54 @@ export default function AutomationPage() {
                           <p style={{ fontSize: 12, color: 'var(--text-disabled)' }}>—</p>
                         )}
                       </div>
+                      <button className="btn-secondary" onClick={() => handleClosePosition(p)} disabled={closingId === p.id} style={{ fontSize: 12, padding: '5px 10px' }}>
+                        {closingId === p.id ? 'Closing…' : 'Close'}
+                      </button>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             </div>
           )
         })()}
+
+        {analytics && analytics.count > 0 && (
+          <div className="card" style={{ padding: 20, marginBottom: 24 }}>
+            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 14 }}>Analytics</p>
+            <div className="m-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: analytics.byStrategy.length > 1 ? 18 : 0 }}>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Trades</p>
+                <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{analytics.count}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Win rate</p>
+                <p style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{analytics.winRate != null ? `${analytics.winRate.toFixed(0)}%` : '—'}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Demo P&amp;L</p>
+                <p style={{ fontSize: 18, fontWeight: 600, color: getPnlColor(analytics.totalPnlDemo), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(analytics.totalPnlDemo, true, symbol)}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>Live P&amp;L</p>
+                <p style={{ fontSize: 18, fontWeight: 600, color: getPnlColor(analytics.totalPnlLive), fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(analytics.totalPnlLive, true, symbol)}</p>
+              </div>
+            </div>
+            {analytics.byStrategy.length > 1 && (
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {analytics.byStrategy.map(s => (
+                  <Link key={s.strategyId} href={`/automation/${s.strategyId}`} style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '6px 4px' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s.strategyName}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{s.count} trade{s.count !== 1 ? 's' : ''}</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-disabled)' }}>{s.winRate != null ? `${s.winRate.toFixed(0)}% win` : '—'}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: getPnlColor(s.totalPnl), fontVariantNumeric: 'tabular-nums', minWidth: 70, textAlign: 'right' }}>{formatCurrency(s.totalPnl, true, symbol)}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading…</div>
