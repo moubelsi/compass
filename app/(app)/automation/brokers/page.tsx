@@ -181,7 +181,7 @@ export default function BrokersPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>OKX</p>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Spot only for now. Create a Demo Trading API key in OKX first for testing.</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Spot (long-only), plus BTC-EUR cross-margin for shorts. Create a Demo Trading API key in OKX first for testing.</p>
             </div>
             {!showOkxForm && (
               <button className="btn-primary" style={{ fontSize: 13 }} onClick={() => setShowOkxForm(true)}>
