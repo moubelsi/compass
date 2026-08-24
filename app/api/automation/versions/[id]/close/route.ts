@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServer } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { processWebhookEvent, type WebhookRow } from '@/lib/automation/pipeline'
 import { getLivePricesForBrokerAccount } from '@/lib/automation/live-prices'
 
@@ -15,7 +15,6 @@ import { getLivePricesForBrokerAccount } from '@/lib/automation/live-prices'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { createClient } = await import('@supabase/supabase-js')
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
