@@ -320,12 +320,13 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const [testOpening, setTestOpening] = useState(false)
+  const [testSide, setTestSide] = useState<'long' | 'short'>('long')
   async function handleTestOpen() {
     setTestOpening(true); setError('')
     const res = await fetch(`/api/automation/versions/${versionId}/test-open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: 'GER40', side: 'long' }),
+      body: JSON.stringify({ symbol: 'GER40', side: testSide }),
     })
     const data = await res.json()
     setTestOpening(false)
@@ -592,8 +593,11 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                     Open positions
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button className="btn-secondary" onClick={handleTestOpen} disabled={testOpening} style={{ fontSize: 12, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      +
+                    <button className={testSide === 'long' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('long')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
+                      + Long
+                    </button>
+                    <button className={testSide === 'short' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('short')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
+                      + Short
                     </button>
                     <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
                       {pnlLoading ? 'Updating…' : pnlUpdatedAt ? `Updated ${pnlUpdatedAt.toLocaleTimeString()}` : ''}
