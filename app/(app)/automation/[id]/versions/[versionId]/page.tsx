@@ -319,6 +319,20 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
     else setError(data.error || 'Could not rotate secret.')
   }
 
+  const [testOpening, setTestOpening] = useState(false)
+  async function handleTestOpen() {
+    setTestOpening(true); setError('')
+    const res = await fetch(`/api/automation/versions/${versionId}/test-open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: 'GER40', side: 'long' }),
+    })
+    const data = await res.json()
+    setTestOpening(false)
+    if (res.ok) load()
+    else setError(data?.error || data?.details || 'Could not open test position.')
+  }
+
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text)
     setCopied(label)
@@ -578,6 +592,9 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                     Open positions
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button className="btn-secondary" onClick={handleTestOpen} disabled={testOpening} style={{ fontSize: 12, padding: '4px 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      +
+                    </button>
                     <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
                       {pnlLoading ? 'Updating…' : pnlUpdatedAt ? `Updated ${pnlUpdatedAt.toLocaleTimeString()}` : ''}
                     </span>
