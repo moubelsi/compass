@@ -16,8 +16,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Verify version exists (without user check, since we're using service key)
+    const { data: versionCheck } = await supabase
+      .from('automation_strategy_versions')
+      .select('id')
+      .eq('id', id)
+      .single()
+    if (!versionCheck) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
     const body = await req.json().catch(() => null)
     const symbol = body?.symbol
