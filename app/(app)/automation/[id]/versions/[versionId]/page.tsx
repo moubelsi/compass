@@ -556,6 +556,16 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
 
         {tab === 'trades' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Test trade:</p>
+              <button className={testSide === 'long' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('long')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
+                + Long
+              </button>
+              <button className={testSide === 'short' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('short')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
+                + Short
+              </button>
+            </div>
+
             {(trades.length > 0 || openPositions.length > 0) && (
               <div className="card m-grid-2" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: `repeat(${openPositions.length > 0 ? 4 : 3}, 1fr)`, gap: 16 }}>
                 <div>
@@ -593,12 +603,6 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
                     Open positions
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button className={testSide === 'long' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('long')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
-                      + Long
-                    </button>
-                    <button className={testSide === 'short' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('short')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
-                      + Short
-                    </button>
                     <span style={{ fontSize: 11, color: 'var(--text-disabled)' }}>
                       {pnlLoading ? 'Updating…' : pnlUpdatedAt ? `Updated ${pnlUpdatedAt.toLocaleTimeString()}` : ''}
                     </span>
