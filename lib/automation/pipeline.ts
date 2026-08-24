@@ -123,7 +123,8 @@ export async function processWebhookEvent(
     if (insertError.code === '23505') {
       return { httpStatus: 200, body: { ok: true, duplicate: true } }
     }
-    return { httpStatus: 500, body: { ok: false, error: 'failed to record event' } }
+    console.error('Webhook event insert error:', insertError.code, insertError.message)
+    return { httpStatus: 500, body: { ok: false, error: 'failed to record event', code: insertError.code, message: insertError.message } }
   }
 
   await supabase.from('automation_webhooks').update({ last_received_at: new Date().toISOString() }).eq('id', webhook.id)
