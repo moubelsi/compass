@@ -477,7 +477,7 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
             <div className="card" style={{ padding: 24 }}>
               <label className="label" style={{ display: 'block', marginBottom: 6 }}>Webhook URL</label>
               <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-                <input className="input" readOnly value={webhookUrl} style={{ fontSize: 12, fontFamily: 'monospace' }} />
+                <input className="input" readOnly value={webhookUrl} style={{ fontSize: 12, fontFamily: 'monospace', minWidth: 0, overflowX: 'auto' }} />
                 <button className="btn-secondary" onClick={() => copy(webhookUrl, 'url')} style={{ fontSize: 12, flexShrink: 0 }}>
                   <Copy size={13} />{copied === 'url' ? 'Copied' : 'Copy'}
                 </button>
