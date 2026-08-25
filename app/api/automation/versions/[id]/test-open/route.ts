@@ -45,16 +45,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       id: `test-open-${id}-${symbol}-${Date.now()}`,
     }
 
+    console.log('[test-open] Starting execution for version:', id, 'signal:', rawBody)
     const result = await processWebhookEvent(supabase, webhook, rawBody, true)
+    console.log('[test-open] Pipeline result:', result)
+
+    // Check the webhook event to see what happened
+    const { data: event } = await supabase
+      .from('automation_webhook_events')
+      .select('id, status, rejection_reason')
+      .eq('webhook_id', webhook.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    console.log('[test-open] Latest webhook event:', event)
 
     // Always check the actual order to see if execution succeeded
     const { data: order } = await supabase
       .from('automation_orders')
-      .select('status, broker_response')
+      .select('status, broker_response, symbol')
       .eq('strategy_version_id', id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
+    console.log('[test-open] Latest order:', order)
 
     if (order && order.status !== 'filled') {
       let brokerError = 'Unknown error'
@@ -64,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } else if (order.broker_response) {
         brokerError = String(order.broker_response)
       }
-      console.error('Test open failed:', brokerError, order)
+      console.error('[test-open] Execution failed with status=' + order.status, 'error=' + brokerError)
       return NextResponse.json({
         ok: false,
         error: 'execution_failed',
