@@ -46,7 +46,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     console.log('[test-open] Starting execution for version:', id, 'signal:', rawBody)
+
+    // For test-open, force paper mode to avoid credential issues while testing UI
+    const { data: version } = await supabase
+      .from('automation_strategy_versions')
+      .select('mode, broker_account_id')
+      .eq('id', id)
+      .single()
+    const originalMode = version?.mode
+    if (originalMode === 'live') {
+      console.log('[test-open] Temporarily switching to paper mode for testing')
+      await supabase.from('automation_strategy_versions').update({ mode: 'paper' }).eq('id', id)
+    }
+
     const result = await processWebhookEvent(supabase, webhook, rawBody, true)
+
+    // Restore original mode
+    if (originalMode === 'live') {
+      await supabase.from('automation_strategy_versions').update({ mode: 'live' }).eq('id', id)
+    }
     console.log('[test-open] Pipeline result:', result)
 
     // Check the webhook event to see what happened
