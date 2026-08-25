@@ -46,6 +46,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const result = await processWebhookEvent(supabase, webhook, rawBody, true)
+
+    // If execution failed, fetch the order to include broker error in response
+    if (result.httpStatus === 200 && !result.body.ok) {
+      const { data: order } = await supabase
+        .from('automation_orders')
+        .select('status, broker_response')
+        .eq('strategy_version_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (order?.status !== 'filled') {
+        const brokerError = typeof order?.broker_response === 'object'
+          ? (order.broker_response as any).error
+          : String(order?.broker_response)
+        return NextResponse.json({
+          ok: false,
+          error: 'execution_failed',
+          broker_error: brokerError,
+          details: result.body
+        }, { status: 200 })
+      }
+    }
+
     return NextResponse.json(result.body, { status: result.httpStatus })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
