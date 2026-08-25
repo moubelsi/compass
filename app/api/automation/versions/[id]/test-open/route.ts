@@ -55,16 +55,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .eq('strategy_version_id', id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
-      if (order?.status !== 'filled') {
-        const brokerError = typeof order?.broker_response === 'object'
-          ? (order.broker_response as any).error
-          : String(order?.broker_response)
+        .maybeSingle()
+      if (order && order.status !== 'filled') {
+        let brokerError = 'Unknown error'
+        if (typeof order.broker_response === 'object' && order.broker_response !== null) {
+          const resp = order.broker_response as Record<string, unknown>
+          brokerError = String(resp.error ?? resp.message ?? JSON.stringify(resp))
+        } else if (order.broker_response) {
+          brokerError = String(order.broker_response)
+        }
         return NextResponse.json({
           ok: false,
           error: 'execution_failed',
           broker_error: brokerError,
-          details: result.body
+          order_status: order.status,
         }, { status: 200 })
       }
     }
