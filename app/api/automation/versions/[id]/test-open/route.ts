@@ -47,30 +47,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const result = await processWebhookEvent(supabase, webhook, rawBody, true)
 
-    // If execution failed, fetch the order to include broker error in response
-    if (result.httpStatus === 200 && !result.body.ok) {
-      const { data: order } = await supabase
-        .from('automation_orders')
-        .select('status, broker_response')
-        .eq('strategy_version_id', id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (order && order.status !== 'filled') {
-        let brokerError = 'Unknown error'
-        if (typeof order.broker_response === 'object' && order.broker_response !== null) {
-          const resp = order.broker_response as Record<string, unknown>
-          brokerError = String(resp.error ?? resp.message ?? JSON.stringify(resp))
-        } else if (order.broker_response) {
-          brokerError = String(order.broker_response)
-        }
-        return NextResponse.json({
-          ok: false,
-          error: 'execution_failed',
-          broker_error: brokerError,
-          order_status: order.status,
-        }, { status: 200 })
+    // Always check the actual order to see if execution succeeded
+    const { data: order } = await supabase
+      .from('automation_orders')
+      .select('status, broker_response')
+      .eq('strategy_version_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (order && order.status !== 'filled') {
+      let brokerError = 'Unknown error'
+      if (typeof order.broker_response === 'object' && order.broker_response !== null) {
+        const resp = order.broker_response as Record<string, unknown>
+        brokerError = String(resp.error ?? resp.message ?? JSON.stringify(resp))
+      } else if (order.broker_response) {
+        brokerError = String(order.broker_response)
       }
+      console.error('Test open failed:', brokerError, order)
+      return NextResponse.json({
+        ok: false,
+        error: 'execution_failed',
+        broker_error: brokerError,
+        order_status: order.status,
+      }, { status: 200 })
     }
 
     return NextResponse.json(result.body, { status: result.httpStatus })
