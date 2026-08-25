@@ -559,10 +559,13 @@ export default function VersionDetailPage({ params }: { params: Promise<{ id: st
             <div className="card" style={{ padding: '12px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
               <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Test trade:</p>
               <button className={testSide === 'long' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('long')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
-                + Long
+                Long
               </button>
               <button className={testSide === 'short' ? 'btn-primary' : 'btn-secondary'} onClick={() => setTestSide('short')} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
-                + Short
+                Short
+              </button>
+              <button className="btn-secondary" onClick={handleTestOpen} disabled={testOpening} style={{ fontSize: 11, padding: '4px 8px' }}>
+                {testOpening ? 'Opening…' : 'Open'}
               </button>
             </div>
 
