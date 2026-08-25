@@ -31,13 +31,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .then(r => r.data as (WebhookRow & { webhook_secret: string }) | null)
     if (!webhook) return NextResponse.json({ error: 'no webhook for this version' }, { status: 404 })
 
+    const entryPrice = price || 26100
+    const slPrice = sl || (side === 'long' ? entryPrice - 100 : entryPrice + 100)
+    const tpPrice = tp || (side === 'long' ? entryPrice + 100 : entryPrice - 100)
+
     const rawBody = {
       secret: webhook.webhook_secret,
       ticker: symbol,
       side,
-      price: price || 26100,
-      sl: sl || null,
-      tp: tp || null,
+      price: entryPrice,
+      sl: slPrice,
+      tp: tpPrice,
       id: `test-open-${id}-${symbol}-${Date.now()}`,
     }
 
