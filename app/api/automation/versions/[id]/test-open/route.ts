@@ -31,9 +31,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .then(r => r.data as (WebhookRow & { webhook_secret: string }) | null)
     if (!webhook) return NextResponse.json({ error: 'no webhook for this version' }, { status: 404 })
 
-    const entryPrice = price || 26100
-    const slPrice = sl || (side === 'long' ? entryPrice - 100 : entryPrice + 100)
-    const tpPrice = tp || (side === 'long' ? entryPrice + 100 : entryPrice - 100)
+    // Fetch live price for entry & SL/TP calculation
+    let entryPrice = price || 0
+    if (!entryPrice) {
+      const { data: version } = await supabase
+        .from('automation_strategy_versions')
+        .select('broker_account_id, automation_broker_accounts(broker, is_live)')
+        .eq('id', id)
+        .single()
+      const account = version?.automation_broker_accounts as unknown as { broker: 'ctrader' | 'okx'; is_live: boolean } | null
+      if (version?.broker_account_id && account) {
+        const { getLivePricesForBrokerAccount } = await import('@/lib/automation/live-prices')
+        const prices = await getLivePricesForBrokerAccount(supabase, version.broker_account_id, account.broker, account.is_live, [symbol])
+        entryPrice = prices[symbol] ?? 26100
+      } else {
+        entryPrice = 26100
+      }
+    }
+    const slPrice = sl || (side === 'long' ? entryPrice - 200 : entryPrice + 200)
+    const tpPrice = tp || (side === 'long' ? entryPrice + 300 : entryPrice - 300)
 
     const rawBody = {
       secret: webhook.webhook_secret,
