@@ -69,21 +69,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .maybeSingle()
     console.log('[test-open] Latest order:', order)
 
-    if (order && order.status !== 'filled') {
-      let brokerError = 'Unknown error'
-      if (typeof order.broker_response === 'object' && order.broker_response !== null) {
-        const resp = order.broker_response as Record<string, unknown>
-        brokerError = String(resp.error ?? resp.message ?? JSON.stringify(resp))
-      } else if (order.broker_response) {
-        brokerError = String(order.broker_response)
+    if (order) {
+      if (order.status !== 'filled') {
+        let brokerError = 'Unknown error'
+        if (typeof order.broker_response === 'object' && order.broker_response !== null) {
+          const resp = order.broker_response as Record<string, unknown>
+          brokerError = String(resp.error ?? resp.message ?? JSON.stringify(resp))
+        } else if (order.broker_response) {
+          brokerError = String(order.broker_response)
+        }
+        console.error('[test-open] Execution failed with status=' + order.status, 'error=' + brokerError)
+        return NextResponse.json({
+          ok: false,
+          error: 'execution_failed',
+          order_status: order.status,
+          broker_error: brokerError,
+          broker_response: order.broker_response,
+        }, { status: 200 })
       }
-      console.error('[test-open] Execution failed with status=' + order.status, 'error=' + brokerError)
-      return NextResponse.json({
-        ok: false,
-        error: 'execution_failed',
-        broker_error: brokerError,
-        order_status: order.status,
-      }, { status: 200 })
+      console.log('[test-open] Order succeeded with status=filled, orderId=' + order.id)
+    } else {
+      console.warn('[test-open] NO ORDER FOUND in database after execution')
     }
 
     return NextResponse.json(result.body, { status: result.httpStatus })
