@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { processWebhookEvent, type WebhookRow } from '@/lib/automation/pipeline'
+import { getLivePricesForBrokerAccount } from '@/lib/automation/live-prices'
 
 /**
  * Test/demo trade opener — simulates a TradingView webhook entry signal
@@ -31,25 +32,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .then(r => r.data as (WebhookRow & { webhook_secret: string }) | null)
     if (!webhook) return NextResponse.json({ error: 'no webhook for this version' }, { status: 404 })
 
-    // Fetch live price for entry & SL/TP calculation
+    // Fetch live price for entry & SL/TP calculation (same logic as close endpoint)
     let entryPrice = price || 0
     if (!entryPrice) {
       const { data: version } = await supabase
         .from('automation_strategy_versions')
         .select('broker_account_id, automation_broker_accounts(broker, is_live)')
         .eq('id', id)
-        .single()
+        .maybeSingle()
       const account = version?.automation_broker_accounts as unknown as { broker: 'ctrader' | 'okx'; is_live: boolean } | null
       if (version?.broker_account_id && account) {
-        const { getLivePricesForBrokerAccount } = await import('@/lib/automation/live-prices')
         const prices = await getLivePricesForBrokerAccount(supabase, version.broker_account_id, account.broker, account.is_live, [symbol])
-        entryPrice = prices[symbol] ?? 26100
-      } else {
+        entryPrice = prices[symbol] ?? 0
+        console.log('[test-open] Live price fetched:', symbol, '=', entryPrice)
+      }
+      if (!entryPrice) {
         entryPrice = 26100
+        console.warn('[test-open] Could not fetch live price, using fallback 26100')
       }
     }
     const slPrice = sl || (side === 'long' ? entryPrice - 200 : entryPrice + 200)
     const tpPrice = tp || (side === 'long' ? entryPrice + 300 : entryPrice - 300)
+    console.log('[test-open] Entry:', entryPrice, 'SL:', slPrice, 'TP:', tpPrice)
 
     const rawBody = {
       secret: webhook.webhook_secret,
