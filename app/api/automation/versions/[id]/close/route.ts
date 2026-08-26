@@ -39,21 +39,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: version } = await supabase
       .from('automation_strategy_versions')
-      .select('mode, broker_account_id, automation_broker_accounts(broker, is_live)')
+      .select('broker_account_id, automation_broker_accounts(broker, is_live)')
       .eq('id', id)
       .single()
     const account = version?.automation_broker_accounts as unknown as { broker: 'ctrader' | 'okx'; is_live: boolean } | null
-    const originalMode = version?.mode
-
-    // For close, use paper mode if in live mode to avoid credential issues
-    if (originalMode === 'live') {
-      await supabase.from('automation_strategy_versions').update({ mode: 'paper' }).eq('id', id)
-    }
 
     // Best-effort live price for the close order's informational "price" field
     // — the broker adapter reports the real fill price regardless of this.
     let price = 0
-    if (version?.broker_account_id && account && originalMode === 'live') {
+    if (version?.broker_account_id && account) {
       const prices = await getLivePricesForBrokerAccount(supabase, version.broker_account_id, account.broker, account.is_live, [symbol])
       price = prices[symbol] ?? 0
     }
@@ -67,11 +61,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const result = await processWebhookEvent(supabase, webhook, rawBody, true)
-
-    // Restore original mode
-    if (originalMode === 'live') {
-      await supabase.from('automation_strategy_versions').update({ mode: 'live' }).eq('id', id)
-    }
     return NextResponse.json(result.body, { status: result.httpStatus })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
