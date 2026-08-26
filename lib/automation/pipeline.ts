@@ -195,7 +195,7 @@ async function openPosition(
     tp: signal.tp,
   })
 
-  const { data: order } = await supabase
+  const { data: order, error: orderInsertError } = await supabase
     .from('automation_orders')
     .insert({
       user_id: webhook.user_id,
@@ -218,6 +218,12 @@ async function openPosition(
     })
     .select('id')
     .single()
+
+  if (orderInsertError) {
+    const details = `${orderInsertError.code}: ${orderInsertError.message}`
+    console.error('Order insert failed:', details, orderInsertError)
+    throw new Error(`Failed to insert order: ${details}`)
+  }
 
   await supabase
     .from('automation_webhook_events')
